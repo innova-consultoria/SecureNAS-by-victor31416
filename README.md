@@ -100,36 +100,4 @@
 | **Documentación y Procedimientos**| Manuales, checklists, diagramas |
 
 ---
-
-## 🧪 Tarjetas Técnicas
-
-### 🔧 Diagnóstico de discos
-```bash
-smartctl -a /dev/sda
-zpool status
-zpool scrub storage
-
-### 🔐 Seguridad básica
-bash
-ufw status
-systemctl list-units --failed
-grep 'NOPASSWD' /etc/sudoers*
-
-### 📦 Auditoría de paquetes
-bash
-dpkg -l | wc -l
-apt list --upgradable
-📡 Monitorización
-bash
-systemctl status netdata
-curl http://localhost:19999
-
-### 🧱 ZFS y almacenamiento
-bash
-zfs list
-zfs get all storage
-df -hT
-
-
-├── /backups
-└── /images
+Contacto: innova.satmadrid@gmail.com
