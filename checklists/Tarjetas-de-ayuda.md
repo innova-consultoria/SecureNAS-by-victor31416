@@ -3,9 +3,9 @@ Guía rápida de comandos técnicos organizados por función. Cada tarjeta inclu
 
 ## 🔧 Diagnóstico de discos
 Soluciona: Verifica el estado físico y lógico de los discos duros y SSD. Detecta errores SMART, sectores defectuosos y estado del pool ZFS.
-### 🏷️ Etiquetas: discos, smartctl, zfs, almacenamiento, diagnóstico
-### 📸 Captura sugerida: images/diagnostico-discos.png
-### 📄 Información técnica que ofrece:
+#### 🏷️ Etiquetas: discos, smartctl, zfs, almacenamiento, diagnóstico
+#### 📸 Captura sugerida: images/diagnostico-discos.png
+#### 📄 Información técnica que ofrece:
 Estado SMART de cada disco
 Errores ATA, sectores reasignados
 Estado del pool ZFS (status, scrub)
@@ -18,20 +18,20 @@ zpool scrub storage
 
 ## 🔐 Seguridad básica
 Soluciona: Detecta configuraciones inseguras como servicios fallidos, sudo sin contraseña, puertos abiertos.
-🏷️ Etiquetas: seguridad, sudo, servicios, firewall, usuarios
-📸 Captura sugerida: images/seguridad-basica.png
-📄 Información técnica que ofrece:
+#### 🏷️ Etiquetas: seguridad, sudo, servicios, firewall, usuarios
+#### 📸 Captura sugerida: images/seguridad-basica.png
+#### 📄 Información técnica que ofrece:
 Servicios fallidos
 Usuarios con privilegios inseguros
 Estado del cortafuegos
-💻 Comandos:
+## 💻 Comandos:
 bash
 ufw status
 systemctl list-units --failed
 grep 'NOPASSWD' /etc/sudoers*
 
 
-📦 Auditoría de paquetes
+## 📦 Auditoría de paquetes
 Soluciona: Evalúa el estado de los paquetes instalados y pendientes de actualización.
 🏷️ Etiquetas: paquetes, apt, dpkg, actualizaciones
 📸 Captura sugerida: images/auditoria-paquetes.png
@@ -45,7 +45,7 @@ dpkg -l | wc -l
 apt list --upgradable
 
 
-📡 Monitorización
+## 📡 Monitorización
 Soluciona: Verifica si los agentes de monitorización están activos y accesibles.
 🏷️ Etiquetas: netdata, zabbix, grafana, monitorización, estado
 📸 Captura sugerida: images/monitorizacion.png
@@ -59,7 +59,7 @@ systemctl status netdata
 curl http://localhost:19999
 
 
-🧱 ZFS y almacenamiento
+## 🧱 ZFS y almacenamiento
 Soluciona: Muestra el estado de los datasets, uso de espacio y propiedades del sistema de archivos.
 🏷️ Etiquetas: zfs, almacenamiento, datasets, espacio, volúmenes
 📸 Captura sugerida: images/zfs-almacenamiento.png
@@ -74,7 +74,7 @@ zfs get all storage
 df -hT
 
 
-🛡️ Cortafuegos y puertos
+## 🛡️ Cortafuegos y puertos
 Soluciona: Detecta servicios expuestos, reglas activas y puertos abiertos.
 🏷️ Etiquetas: iptables, nftables, puertos, nmap, ss
 📸 Captura sugerida: images/cortafuegos-puertos.png
@@ -90,7 +90,7 @@ ss -tuln
 nmap -sT -O localhost
 
 
-🧬 Virtualización y contenedores
+## 🧬 Virtualización y contenedores
 Soluciona: Muestra el tipo de virtualización, máquinas virtuales activas y contenedores en ejecución.
 🏷️ Etiquetas: proxmox, kvm, docker, lxc, kubernetes
 📸 Captura sugerida: images/virtualizacion.png
