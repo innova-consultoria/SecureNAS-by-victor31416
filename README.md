@@ -109,13 +109,13 @@ smartctl -a /dev/sda
 zpool status
 zpool scrub storage
 
-🔐 Seguridad básica
+### 🔐 Seguridad básica
 bash
 ufw status
 systemctl list-units --failed
 grep 'NOPASSWD' /etc/sudoers*
 
-📦 Auditoría de paquetes
+### 📦 Auditoría de paquetes
 bash
 dpkg -l | wc -l
 apt list --upgradable
@@ -124,19 +124,12 @@ bash
 systemctl status netdata
 curl http://localhost:19999
 
-🧱 ZFS y almacenamiento
+### 🧱 ZFS y almacenamiento
 bash
 zfs list
 zfs get all storage
 df -hT
 
-📁 Estructura del Repositorio
-Código
-SecureNAS-by-victor31416/
-├── README.md
-├── /docs
-├── /scripts
-├── /configs
-├── /checklists
+
 ├── /backups
 └── /images
