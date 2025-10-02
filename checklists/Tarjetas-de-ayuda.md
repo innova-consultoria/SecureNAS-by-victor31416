@@ -3,13 +3,13 @@ Guía rápida de comandos técnicos organizados por función. Cada tarjeta inclu
 
 ## 🔧 Diagnóstico de discos
 Soluciona: Verifica el estado físico y lógico de los discos duros y SSD. Detecta errores SMART, sectores defectuosos y estado del pool ZFS.
-###🏷️ Etiquetas: discos, smartctl, zfs, almacenamiento, diagnóstico
+### 🏷️ Etiquetas: discos, smartctl, zfs, almacenamiento, diagnóstico
 ### 📸 Captura sugerida: images/diagnostico-discos.png
-###📄 Información técnica que ofrece:
+### 📄 Información técnica que ofrece:
 Estado SMART de cada disco
 Errores ATA, sectores reasignados
 Estado del pool ZFS (status, scrub)
-##💻 Comandos:
+##   💻 Comandos:
 bash
 smartctl -a /dev/sda
 zpool status
