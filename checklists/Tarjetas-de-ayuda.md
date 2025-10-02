@@ -1,7 +1,7 @@
-🧪 Tarjetas de ayuda — Proyecto SNAS
+### 🧪 Tarjetas de ayuda — Proyecto SNAS
 Guía rápida de comandos técnicos organizados por función. Cada tarjeta incluye una descripción, etiquetas, comandos útiles y espacio para documentación visual.
 
-🔧 Diagnóstico de discos
+## 🔧 Diagnóstico de discos
 Soluciona: Verifica el estado físico y lógico de los discos duros y SSD. Detecta errores SMART, sectores defectuosos y estado del pool ZFS.
 🏷️ Etiquetas: discos, smartctl, zfs, almacenamiento, diagnóstico
 📸 Captura sugerida: images/diagnostico-discos.png
@@ -16,7 +16,7 @@ zpool status
 zpool scrub storage
 
 
-🔐 Seguridad básica
+## 🔐 Seguridad básica
 Soluciona: Detecta configuraciones inseguras como servicios fallidos, sudo sin contraseña, puertos abiertos.
 🏷️ Etiquetas: seguridad, sudo, servicios, firewall, usuarios
 📸 Captura sugerida: images/seguridad-basica.png
