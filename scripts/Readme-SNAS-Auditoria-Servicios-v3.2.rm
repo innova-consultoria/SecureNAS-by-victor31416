@@ -1,0 +1,92 @@
+🧾 Informe de Auditoría Técnica — SNAS-Auditoria-Servicios-v3.2
+📌 Resumen del script
+SNAS-Auditoria-Servicios-v3.2.sh es una herramienta avanzada de auditoría técnica para sistemas NAS (Network Attached Storage), diseñada como parte del proyecto SecureNAS-by-victor31416. Su objetivo es realizar un diagnóstico completo del entorno Linux, evaluando:
+
+Configuración del sistema operativo
+
+Capacidad de virtualización
+
+Rendimiento de disco y memoria
+
+Estado de seguridad y servicios activos
+
+Disponibilidad de servicios NAS
+
+Monitorización del sistema
+
+Exportación de resultados en formatos .txt, .json, .md, .html
+
+Este script está optimizado para entornos Debian/Ubuntu y puede ejecutarse en modo completo, remoto o modular. Incluye instalación automática de dependencias, gestión de errores, y generación de informes estructurados.
+
+⚙️ Características principales
+Modularidad: 7 módulos independientes que cubren aspectos clave del sistema.
+
+Exportación multi-formato: Genera informes en texto plano, JSON, Markdown y HTML.
+
+Compatibilidad: Diseñado para entornos Proxmox, Debian 12 (bookworm), y sistemas compatibles.
+
+Robustez: Manejo de errores con set -euo pipefail, validación de comandos, y tolerancia ante dependencias opcionales.
+
+Automatización: Instalación silenciosa de paquetes críticos y opcionales mediante apt.
+
+📂 Estructura del script
+Módulo	Descripción
+1. Sistema Operativo	Información de distribución, kernel, uptime, arquitectura
+2. Virtualización	Detección de entorno virtualizado (systemd-detect-virt)
+3. Rendimiento	Benchmark de disco (dd) y memoria (dd a /dev/null)
+4. Seguridad	Puertos abiertos (ss) y servicios activos (systemctl)
+5. Servicios NAS	Estado de samba, nfs-server, nextcloud
+6. Monitorización	Verificación de netdata
+7. Resumen Ejecutivo	Consolidación de resultados y exportación
+📊 Resultados de la ejecución (2025-10-03 10:47:07)
+🔍 Dependencias
+Críticas instaladas correctamente
+
+Opcionales faltantes: docker, virsh (advertencias controladas)
+
+Instalación automática silenciosa ejecutada sin errores
+
+🧠 Sistema operativo
+Distribución: Debian GNU/Linux 12 (bookworm)
+
+Kernel: Linux 6.8.12-15-pve
+
+Arquitectura: x86-64
+
+Fabricante: MSI
+
+Modelo: MS-7982
+
+🧪 Rendimiento
+Velocidad de escritura en disco: 346 MB/s
+
+Velocidad de memoria: (no capturada en esta ejecución)
+
+🔐 Seguridad
+Puertos abiertos: 17 servicios en escucha (TCP/UDP)
+
+Servicios activos: 34 unidades activas, incluyendo Netdata, Proxmox, SSH, ZFS
+
+📡 Servicios NAS
+samba, nfs-server, nextcloud: inactivos
+
+📈 Monitorización
+netdata: activo
+
+📋 Resumen ejecutivo
+Tiempo total de ejecución: 0 segundos
+
+Módulos completados: 6
+
+Servicios NAS activos: 3 (aunque reportados como inactivos, el contador refleja 3 claves en el array)
+
+Riesgos detectados: 0
+
+Dependencias faltantes: 2
+
+📁 Archivos generados
+SNAS-Auditoria-Servicios_20251003_104707.txt → Informe completo en texto plano
+
+SNAS-Auditoria-Servicios_20251003_104707.json → Estructura exportable para visualización o integración
+
+(Opcionalmente se generan .md y .html si se ejecuta en modo completo con Pandoc disponible)
