@@ -1,0 +1,130 @@
+🧾 Informe Técnico — SNAS-Auditoria-Completa-Equipo-v2.sh
+📌 Resumen del script
+SNAS-Auditoria-Completa-v2.sh es una herramienta de auditoría exhaustiva diseñada para evaluar el estado técnico, operativo y de seguridad de un equipo Linux en el contexto del proyecto SecureNAS-by-victor31416 (Fase 0). A diferencia del script de servicios NAS, esta versión se enfoca en el inventario físico, uso de almacenamiento, seguridad de usuarios, virtualización, monitorización externa y riesgos críticos del sistema.
+
+Está pensada para ejecutarse en entornos locales, servidores físicos o virtuales, y proporciona un informe detallado en formato .txt y .json, con especial énfasis en la detección de vulnerabilidades, estado SMART de discos, y recomendaciones de mejora.
+
+⚙️ Características principales
+Auditoría integral del equipo físico y lógico
+
+Análisis SMART extendido de discos IronWolf/NVMe
+
+Evaluación de seguridad de usuarios, sudoers y shells
+
+Detección de agentes de monitorización (Zabbix, Prometheus, etc.)
+
+Escaneo de puertos locales con nmap o ss
+
+Análisis de logs críticos del sistema
+
+Resumen ejecutivo con riesgos detectados y recomendaciones Fase 0
+
+📂 Estructura modular
+Módulo	Descripción
+1. Hardware físico	Inventario completo de CPU, RAM, discos, SMART
+2. Almacenamiento	Uso por usuario, análisis de /home, /var, /opt, /srv, /tmp
+3. Sistema operativo	Distribución, paquetes instalados, actualizaciones pendientes
+4. Servicios y usuarios	Servicios activos, sudoers, cuentas inseguras, UID 0
+5. Virtualización	Detección de entorno virtualizado
+6. Seguridad y red	Interfaces, conexiones, escaneo de puertos, logs
+7. Monitorización externa	Detección de Zabbix, Prometheus, Nagios, etc.
+8. Resumen ejecutivo	Consolidación de datos, riesgos detectados, recomendaciones
+📊 Resultados esperados
+🔧 Hardware
+Fabricante, modelo, serial del equipo
+
+Arquitectura CPU, núcleos, RAM total/libre
+
+Discos detectados y estado SMART detallado
+
+Errores SMART y atributos críticos (temperatura, sectores reasignados, etc.)
+
+💾 Almacenamiento
+Uso por usuario en /home
+
+Espacio ocupado en /var, /opt, /srv, /tmp
+
+Archivos más grandes por directorio
+
+🧬 Sistema operativo
+Distribución Linux (ej. Debian 12)
+
+Número total de paquetes instalados
+
+Paquetes críticos detectados (apache, nginx, docker, etc.)
+
+Actualizaciones pendientes
+
+🔐 Seguridad
+Servicios activos (systemctl)
+
+Usuarios con sudo sin contraseña (NOPASSWD)
+
+Cuentas sin contraseña (shadow)
+
+Shells inválidos (nologin, false)
+
+Usuarios con UID 0
+
+Miembros de grupos administrativos (sudo, wheel, etc.)
+
+🌐 Red y monitorización
+Interfaces de red (ip addr)
+
+Conexiones activas (ss)
+
+Escaneo de puertos (nmap localhost)
+
+Logs del sistema (syslog, auth.log, kern.log)
+
+Intentos de acceso SSH
+
+Uso reciente de sudo
+
+📡 Monitorización externa
+Estado del agente Zabbix
+
+Detección de Prometheus, Nagios, NRPE, Node Exporter
+
+📋 Resumen ejecutivo
+Incluye:
+
+Arquitectura, kernel, uptime
+
+Estado de CPU, RAM, discos
+
+Espacio total y usado
+
+Usuarios totales y con shell
+
+Servicios activos y puertos abiertos
+
+Riesgos detectados:
+
+❌ Cuentas sin contraseña
+
+⚠️ Sudo sin contraseña
+
+⚠️ SSH en puerto 22
+
+🧠 Recomendaciones Fase 0
+Verificar estado SMART de discos IronWolf
+
+Revisar configuración sudo y usuarios
+
+Cambiar puertos de servicios predeterminados (SSH)
+
+Planificar backup inicial antes de cambios
+
+Considerar expansión de RAM y NIC 2.5Gbps
+
+Documentar configuración actual
+
+Actualizar paquetes críticos
+
+Priorizar servicios según necesidades
+
+📁 Archivos generados
+SNAS-Auditoria-Completa-v2_YYYYMMDD_HHMMSS.txt → Informe completo
+
+SNAS-Auditoria-Completa-v2_YYYYMMDD_HHMMSS.json → Estructura exportable
