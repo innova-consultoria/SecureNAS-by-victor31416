@@ -32,14 +32,16 @@
 | Componente         | Especificación                        | Estado     |
 |--------------------|----------------------------------------|------------|
 | CPU                | Intel Core i7-6700 (8 hilos, VT-x)     | ✅ Operativo |
-| RAM                | 8 GB DDR4 Kingston @2133MT/s           | ⚠️ Incompleto (plan: 16 GB) |
+| RAM                | 16 GB DDR4 Kingston @2133MT/s           | ✅ Operativo reparado módulo 2x8 = 16 GB) |
 | Discos IronWolf    | 3x 4TB (ZFS RAID-Z1)                   | ⚠️ sda fallido, sdb/sdc OK |
-| SSD Kingston       | 120 GB (Proxmox)                       | ⚠️ 3 % vida útil restante |
-| Disco Backup       | Emtec 960 GB                           | ❓ No detectado en auditoría |
+| SSD Kingston       | 120 GB (Proxmox)                       | ⚠️ 3 % vida útil restante ** se modificará en breve ** |
+| Disco Backup       | Emtec 960 GB                           | ❓ No detectado en auditoría. Se elimina del sistema |
 | Placa Base         | MSI B150M PRO-VDH                      | ✅ Operativa |
 | Red                | 1Gbps LAN                              | ✅ Estable |
 | Sistema Operativo  | Debian 12 + Proxmox VE                 | ✅ Actualizado |
 | Servicios detectados | Netdata, Nextcloud, ZFS              | ✅ Instalados |
+
+📎 [Estado actualizado del hardware SNAS (Oct 2025)](documentacion/README-Hardware-SNAS.md)
 
 ---
 
@@ -52,6 +54,8 @@
 - 744 paquetes instalados, incluyendo Proxmox, ZFS, SSH, Netdata
 - Servicios como Nextcloud y Netdata detectados, pero no auditados en ejecución
 - No se confirma conexión del disco Emtec ni estado de VLANs o cortafuegos
+
+📎 [Estado actualizado del hardware SNAS (Oct 2025)](documentacion/README-Hardware-SNAS.md)
 
 ---
 
