@@ -1,0 +1,79 @@
+# 🧠 SNAS - Auditoría de Almacenamiento v2.2 (Profesional)
+
+Este script realiza una auditoría completa de todos los discos físicos del sistema, generando informes técnicos en múltiples formatos y evitando pruebas destructivas en discos críticos.
+
+---
+
+## 🚀 Características principales
+
+- ✅ Detección automática de discos físicos y del sistema
+- ✅ Pruebas SMART, benchmarks, superficie, vida útil y errores
+- ✅ Exportación en `.log`, `.md`, `.json`, `.html`
+- ✅ Exclusión segura de discos raíz, ZFS y RAID
+- ✅ Visualización por colores y barra de progreso por disco
+- ✅ Logs individuales por disco con trazabilidad
+- ✅ Informe ejecutivo con alertas predictivas y recomendaciones
+- ✅ Compatible con Debian y entornos Proxmox
+
+---
+
+## 📦 Requisitos
+
+Instala dependencias necesarias:
+
+```bash
+sudo apt install smartmontools hdparm util-linux coreutils bc
+
+## 🧪 Ejecución
+bash
+sudo ./SNAS-Auditoria-v2.2-Almacenamiento.sh [basic|standard|complete]
+Si no se especifica nivel, se solicitará interactivamente:
+
+basic: SMART + info básica (5 min total)
+
+standard: + benchmarks rápidos (15 min total)
+
+complete: + tests completos (45 min total)
+
+## 📄 Ubicación de reportes
+/var/log/snas/audit_almacenamiento_*.log → Detallado por disco
+
+/var/log/snas/audit_almacenamiento_*.md → Informe técnico en Markdown
+
+/var/log/snas/audit_almacenamiento_*.json → Integración con dashboards
+
+/var/log/snas/audit_almacenamiento_*.html → Informe visual profesional
+
+/var/log/snas/disk_<nombre>_*.log → Logs individuales por disco
+
+## 📋 Checklist de auditoría
+[x] Verificar dependencias instaladas
+
+[x] Detectar discos físicos y del sistema
+
+[x] Ejecutar auditoría en modo seguro
+
+[x] Validar resultados SMART
+
+[x] Confirmar benchmarks y superficie
+
+[x] Exportar informes en todos los formatos
+
+[x] Revisar logs individuales por disco
+
+[x] Documentar resultados en Markdown y HTML
+
+[x] Subir script y documentación al repositorio
+
+## 🧩 Recomendaciones
+Implementar monitoreo SMART continuo
+
+Planificar backups regulares
+
+Mantener discos bajo 50 °C
+
+Reemplazar discos con vida útil < 20 %
+
+Evitar pruebas intensivas en discos del sistema
+
+Autor: victor31416 Versión: 2.2 Profesional Proyecto: SecureNAS-by-victor31416
