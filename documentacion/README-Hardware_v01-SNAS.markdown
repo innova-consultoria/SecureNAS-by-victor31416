@@ -25,7 +25,7 @@
 | Componente          | Estado anterior                            | Estado actual                              |
 |---------------------|--------------------------------------------|--------------------------------------------|
 | Sistema Operativo   | Debian bare-metal                          | ✅ Proxmox VE 9.0 instalado                |
-| SSD Sistema         | Samsung 860 EVO 250 GB operativo           | ✅ Samsung 860 EVO 250 GB operativo         |
+| SSD Sistema         | ❌ Kingston SUV400S37/120G inconsistente   | ✅ Samsung 860 EVO 250 GB operativo         |
 | Cables SATA         | Problema en sda (1.5 Gb/s, ruido "tic, tic") | ⚠️ Todos a 6.0 Gb/s, ruido "cloc" en sdc   |
 | Almacenamiento      | Pool ZFS storage (RAIDZ1)                  | ❌ Pool destruido, pendiente recreación    |
 | Arquitectura        | Servicios directos sobre SO                | ⏳ Fase 0 completada, Fase 1 en progreso   |
