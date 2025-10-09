@@ -139,8 +139,4 @@ Se utilizó el script personalizado `SNAS-Auditoria-v2.2-Almacenamiento.sh`, pos
 - Publicar este informe en `documentacion/03-Problemas_HDDs_y_ZFS.md`
 
 ---
-# 📋 INFORME EJECUTIVO COMPLETO – SecureNAS Proxmox Implementación  
-**Archivo:** `03-Problemas_HDDs_y_ZFS.md`  
-**Fecha:** 09 de octubre de 2025  
-**Proyecto:** [SecureNAS-by-victor31416](https://github.com/innova-consultoria/SecureNAS-by-victor31416)
 
