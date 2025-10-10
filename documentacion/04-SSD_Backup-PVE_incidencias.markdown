@@ -1,265 +1,126 @@
-Gestión Completa de Disco WD Blue y Resolución de Problemas en Proxmox
-📋 Resumen Ejecutivo del Día
-Fecha: 10 de Octubre, 2025
-Objetivo: Investigación de datos residuales, preparación de disco WD Blue SSD y resolución de problemas de arranque en servidor Proxmox
+# 📋 INFORME TÉCNICO – SSD WD Blue 500GB y Backup PVE  
+**Archivo:** `04-SSD_Backup-PVE_incidencias.md`  
+**Fecha:** 10 de octubre de 2025  
+**Proyecto:** [SecureNAS-by-victor31416](https://github.com/innova-consultoria/SecureNAS-by-victor31416)
 
-Cronología de Actividades y Movimientos Físicos del Disco
-Fase Windows SATA III - Análisis forense inicial desde Windows 10 Pro via conexión SATA III interna
+---
 
-Fase Proxmox USB - Traslado a servidor Proxmox via adaptador USB 3.0 para formateo y configuración
+## 🧭 FASE 1: INVESTIGACIÓN FORENSE Y ANÁLISIS DE DATOS RESIDUALES
 
-Fase Windows SATA III - Retorno a Windows 10 Pro para uso como almacenamiento backup
+### 🔧 Configuración inicial
 
-Incidente Crítico - Problemas de arranque en Proxmox por dependencias residuales del disco USB
+- Se conecta el disco WD Blue SSD 500GB a un MiniPC con Windows 10 Pro mediante SATA III interno.
+- Se realiza una investigación forense para verificar si contiene datos sensibles.
 
-Resolución de Emergencia - Eliminación de configuraciones conflictivas y restauración del sistema
+### 🧪 Herramientas utilizadas
 
-Implementación de Backup - Configuración de Rclone y primera copia de seguridad exitosa
+- **TestDisk**: se detecta una partición XFS con trazas de Debian y Nextcloud.
+- **PhotoRec**: se recuperan archivos de configuración, logs y metadatos.
 
-🔍 Fase 1: Investigación Forense y Análisis de Datos Residuales
-Contexto Inicial
-El disco WD Blue SSD 500GB contenía previamente una instalación de Debian con Nextcloud que fue desmantelada. Antes de reutilizar el disco, se realizó una investigación exhaustiva para:
+### ✅ Conclusión
 
-Identificar datos sensibles residuales
+- No se detectan datos sensibles.
+- El disco queda apto para formateo y reutilización.
 
-Evaluar posibilidad de recuperación de información
+---
 
-Determinar necesidad de borrado seguro
+## 🔄 FASE 2: FORMATEO Y MONTAJE EN PROXMOX
 
-Configuración Hardware - Fase Windows SATA III
-Ubicación: MiniPC Windows 10 Pro
+### 🔌 Conexión
 
-Conexión: SATA III interno
+- Se conecta el disco a Proxmox mediante adaptador USB 3.0 externo.
 
-Interfaz: Directa a placa base
+### 🔍 Verificación SMART
 
-Propósito: Análisis forense y recuperación de datos
-
-Metodología de Investigación
-1. Análisis desde Windows con TestDisk
-bash
-# Escaneo profundo de estructuras de partición
-testdisk /dev/sdX
-Hallazgos:
-
-Partición 6: Sistema de archivos XFS con datos residuales
-
-Estructuras: Trazas de instalación Debian anterior
-
-Estado: Particiones reconocibles pero sin datos críticos identificados
-
-2. Recuperación Evaluativa con PhotoRec
-bash
-# Búsqueda de archivos por firmas binarias
-photorec /dev/sdX
-Resultados de Recuperación:
-
-Archivos de configuración del sistema
-
-Logs y temporales de Nextcloud
-
-Metadatos de sistema de archivos
-
-Conclusión: Sin datos sensibles o críticos identificados
-
-Decisión de Formateo
-Tras confirmar que los datos residuales no contenían información sensible y consistían principalmente en:
-
-Archivos de sistema operativo
-
-Logs de aplicación
-
-Configuraciones no críticas
-
-Se procedió con el formateo para reutilización segura.
-
-🛠️ Fase 2: Preparación y Configuración en Proxmox via USB
-Configuración Hardware - Fase Proxmox USB
-Ubicación: Servidor Proxmox
-
-Conexión: Adaptador USB 3.0 externo
-
-Interfaz: USB to SATA
-
-Propósito: Formateo, pruebas y configuración como unidad de backup
-
-Conexión e Integración con Proxmox
-Verificación de Hardware
-bash
-# Detección del dispositivo
-lsblk | grep sde
-
-# Información detallada del disco
+```bash
 smartctl -i /dev/sde
-Análisis SMART Completo
-bash
 smartctl -x /dev/sde
-Resultados del Estado del Disco:
+```
 
-Modelo: WD Blue SA510 2.5" 500GB SSD
+- Estado: PASSED
+- Horas de uso: 2
+- Temperatura: 31 °C
+- Sectores reasignados: 0
+- Indicador de desgaste: 510 (óptimo)
 
-Estado SMART: ✅ PASSED (óptimo)
+### 🧹 Formateo y montaje
 
-Horas de Operación: 2 horas
-
-Ciclos de Energía: 64
-
-Temperatura: 31°C (Rango 18°C-48°C)
-
-Sectores Reasignados: 0
-
-Errores CRC: 0
-
-Indicador de Desgaste: 510 (óptimo)
-
-Proceso de Formateo y Configuración
-Formateo a NTFS
-bash
-# Identificación del dispositivo
-lsblk | grep sde
-
-# Formateo a NTFS para compatibilidad cross-platform
+```bash
 mkfs.ntfs /dev/sde1 -f
-
-# Verificación del formateo
 blkid /dev/sde1
-Configuración de Montaje en Proxmox
-bash
-# Creación del punto de montaje
 mkdir -p /mnt/pve_bkp
-
-# Montaje manual inicial
 mount /dev/sde1 /mnt/pve_bkp
-
-# Configuración en fstab para montaje automático
 echo "/dev/sde1 /mnt/pve_bkp ntfs defaults 0 2" >> /etc/fstab
-Pruebas de Rendimiento y Estabilidad
-Pruebas con FIO
-Se ejecutaron pruebas intensivas de lectura/escritura para validar:
+```
 
-Rendimiento sostenido en transferencias largas
+### 📊 Pruebas de rendimiento
 
-Estabilidad del dispositivo bajo carga
+- Se realizan pruebas con `fio`.
+- Resultado: disco estable y listo para producción.
 
-Consistencia sin degradación del rendimiento
+---
 
-Resultado: ✅ Disco estable y listo para operaciones de producción
+## 🔁 FASE 3: RETORNO A WINDOWS 10 PRO
 
-🔄 Fase 3: Retorno a Windows 10 Pro via SATA III
-Configuración Hardware - Fase Final Windows SATA III
-Ubicación: MiniPC Windows 10 Pro
+- Se desconecta el disco de Proxmox y se vuelve a conectar al MiniPC por SATA III.
+- Se verifica que el disco está vacío y formateado en NTFS.
+- Se prepara para recibir backups sincronizados desde Proxmox.
 
-Conexión: SATA III interno
+---
 
-Interfaz: Directa a placa base
+## 🚨 FASE 4: INCIDENTE CRÍTICO EN PROXMOX
 
-Propósito: Almacenamiento principal de backups sincronizados desde Proxmox
+### ❗ Problema
 
-Estado: Formateado NTFS, vacío, listo para recibir backups
+- El sistema no arranca debido a una dependencia residual en `/etc/fstab`.
+- El disco `/dev/sde1` no está presente y el sistema entra en modo emergencia.
 
-Proceso de Desconexión Segura desde Proxmox
-bash
-# Desmontaje seguro
-umount /mnt/pve_bkp
+### 🧭 Diagnóstico
 
-# Verificación de desmontaje
-df -h
+```bash
+journalctl -b -1 | grep sde1
+```
 
-# Apagado seguro del sistema
-shutdown -h now
-🚨 Fase 4: Incidente Crítico en Proxmox
-El Problema
-Tras la desconexión segura del disco WD Blue y su retorno a Windows, el servidor Proxmox presentó fallos críticos de arranque al no encontrar el dispositivo configurado en fstab.
+- Se detecta timeout en `/dev/sde1`.
+- El servicio `mnt-pvc_bkp.mount` falla.
 
-Síntomas Detectados:
+---
 
-Timeout esperando dispositivo /dev/sde1
+## 🧯 FASE 5: RESOLUCIÓN DEL INCIDENTE
 
-Dependencias fallidas: mnt-pvc_bkp.mount
+### 🛠️ Acciones realizadas
 
-Fallo en local-fs.target
-
-Sistema bloqueado en modo emergencia
-
-Evidencias en Logs:
-
-bash
-journalctl -b -1 | grep -E "sde1|pvc_bkp|emergency"
-text
-oct 10 18:05:51 pve systemd[1]: Timed out waiting for device dev-sde1.device - /dev/sde1.
-oct 10 18:05:51 pve systemd[1]: Dependency failed for mnt-pvc_bkp.mount - /mnt/pvc_bkp.
-oct 10 18:05:51 pve systemd[1]: Reached target emergency.target - Emergency Mode.
-Diagnóstico
-Causa Raíz: Entradas residuales en /etc/fstab y servicios systemd
-
-Configuración Conflictiva:
-
-bash
-/dev/sde1 /mnt/pvc_bkp ntfs defaults 0 2
-Servicio Asociado: mnt-pvc_bkp.mount
-
-🔧 Fase 5: Resolución del Incidente
-Acceso al Sistema
-Ingreso al modo emergencia con credenciales root
-
-Diagnóstico inicial del problema
-
-Pasos de Resolución
-1. Identificación de Configuraciones Problemáticas
-bash
-# Entrada problemática en fstab
+```bash
 cat /etc/fstab | grep sde
-
-# Servicios de montaje conflictivos
 systemctl list-units --all | grep mount
-2. Eliminación de Configuraciones Conflictivas
-bash
-# Backup de fstab
 cp /etc/fstab /etc/fstab.backup
-
-# Eliminación de entrada problemática
 sed -i '/sde1/d' /etc/fstab
-
-# Deshabilitación y bloqueo del servicio
 systemctl disable mnt-pvc_bkp.mount
 systemctl mask mnt-pvc_bkp.mount
-3. Verificación de la Solución
-bash
-# Confirmación de fstab limpio
-cat /etc/fstab | grep sde1
-
-# Estado de servicios del sistema
 systemctl status local-fs.target
-Resultado de la Resolución
-✅ Sistema restaurado: Arranque normal sin errores
+```
 
-✅ Dependencias resueltas: local-fs.target operativo
+### ✅ Resultado
 
-✅ Configuración limpia: Sin referencias a dispositivos no presentes
+- El sistema arranca correctamente.
+- Se eliminan dependencias conflictivas.
+- Se bloquea el servicio conflictivo.
 
-✅ Prevención futura: Servicio maskado para evitar reactivación
+---
 
-💾 Fase 6: Implementación de Sistema de Backup con Rclone
-Configuración de Rclone en Windows
-1. Creación de Remote SFTP
-Nombre: proxmox_backup
+## 💾 FASE 6: IMPLEMENTACIÓN DE BACKUP CON RCLONE
 
-Tipo: SFTP (opción 50)
+### 🔧 Configuración Rclone
 
-Host: 192.168.1.7X
+- Se configura Rclone en Windows para conectarse al servidor Proxmox por SFTP.
 
-Usuario: root
-
-Puerto: 22
-
-2. Verificación de Conectividad
-bash
+```bash
 rclone lsd proxmox_backup:/
-Resultado: Conexión SFTP exitosa con listado de directorios del sistema
+```
 
-Estrategia de Backup Implementada
-Estructura de Directorios
-text
+### 📁 Estructura de backup
+
+```
 PVE_BKP/
 └── YYYYMMDD_HHMM_Bkp_01/
     ├── etc_backup.tar.gz
@@ -267,10 +128,13 @@ PVE_BKP/
     ├── var_lib_backup.tar.gz
     ├── installed_packages.txt
     └── checksum.sha256
-Script de Backup (backup_pve.sh)
-bash
+```
+
+### 📝 Script de backup
+
+```bash
 #!/bin/bash
-FECHA=$(date +"%Y%m%d_%H%M")
+FECHA=$(date "+%Y%m%d_%H%M")
 BACKUP_NAME="${FECHA}_Bkp_01"
 BACKUP_DIR="/mnt/pve_bkp/PVE_BKP/$BACKUP_NAME"
 
@@ -280,117 +144,56 @@ tar -czf $BACKUP_DIR/root_backup.tar.gz /root/ --exclude=/root/.cache
 tar -czf $BACKUP_DIR/var_lib_backup.tar.gz /var/lib/
 dpkg --get-selections > $BACKUP_DIR/installed_packages.txt
 cd $BACKUP_DIR && sha256sum * > checksum.sha256
-Primera Ejecución Exitosa
-Backup creado: 20251010_1932_Bkp_01
+```
 
-Tamaño total: ~28 MB
+### 🔁 Sincronización a Windows
 
-Archivos incluidos: 5
+```bash
+rclone sync proxmox_backup:/mnt/pve_bkp/PVE_BKP/ D:\PVE_BKP
+```
 
-Verificación de integridad: ✅ Checksums válidos
+---
 
-Sincronización a Windows:
+## 📊 MÉTRICAS Y VERIFICACIONES FINALES
 
-bash
-rclone sync proxmox_backup:/mnt/pve_bkp/PVE_BKP/ D:\PVE_BKP\
-📊 Métricas y Verificaciones Finales
-Estado del Sistema Post-Resolución
-local-fs.target: ✅ Activo y funcionando
+- `local-fs.target`: activo
+- Espacio en disco: suficiente
+- Conectividad: estable
+- Backup: verificado vía SHA256
+- Accesibilidad: desde Windows y Proxmox
+- Estado SMART del disco: óptimo
 
-Servicios críticos: ✅ Operativos
+---
 
-Espacio en disco: ✅ Suficiente
+## 📚 LECCIONES APRENDIDAS
 
-Conectividad de red: ✅ Estable
+- Realizar investigación forense antes de reutilizar discos.
+- Documentar movimientos físicos y cambios de interfaz.
+- Desmontar discos correctamente antes de apagar el sistema.
+- Limpiar configuraciones obsoletas en `/etc/fstab`.
+- Usar `systemctl mask` para evitar reactivaciones no deseadas.
+- Validar integridad de backups con checksums.
 
-Verificación de Backup
-Estructura: ✅ Correcta
+---
 
-Contenido: ✅ Completo
+## 🎯 PRÓXIMOS PASOS
 
-Integridad: ✅ Verificada via SHA256
+### ⏱️ Corto plazo
 
-Accesibilidad: ✅ Desde Windows y Proxmox
+- Automatizar backups vía `cron` en Proxmox.
+- Programar sincronización en Windows.
+- Probar restauración desde backup.
 
-Estado del Disco WD Blue
-Ubicación final: Windows 10 Pro via SATA III
+### 📆 Medio plazo
 
-Formato: NTFS
+- Implementar retención automática de backups antiguos.
+- Configurar alertas de estado de backups.
+- Documentar recuperación ante desastres.
 
-Contenido: Backups sincronizados desde Proxmox
+### 🌐 Largo plazo
 
-Estado SMART: ✅ Óptimo
+- Evaluar estrategia de backup off-site.
+- Encriptar backups sensibles.
+- Automatizar todo el pipeline de respaldo.
 
-🛠️ Lecciones Aprendidas
-Mejores Prácticas Implementadas
-Investigación forense previa: Análisis exhaustivo antes de reutilizar discos
-
-Movimientos físicos documentados: Registro de cambios de ubicación y conexión
-
-Always unmount safely: Desmontaje seguro de dispositivos antes de desconectar
-
-Configuration cleanup: Limpieza de entradas obsoletas en fstab
-
-Service masking: Uso de systemctl mask para prevenir reactivación accidental
-
-Backup verification: Implementación de checksums para validar integridad
-
-Prevención de Problemas Futuros
-Monitorización de dependencias de arranque
-
-Revisiones periódicas de configuración fstab
-
-Validación de dispositivos antes de configuraciones permanentes
-
-Estrategia de backup probada y documentada
-
-Documentación de movimientos físicos de hardware
-
-🎯 Próximos Pasos Recomendados
-Corto Plazo
-Programar ejecución automática de backups vía cron en Proxmox
-
-Configurar tarea programada en Windows para sincronización automática
-
-Probar proceso de restauración desde backup
-
-Medio Plazo
-Implementar retención automática de backups antiguos
-
-Configurar alertas de estado de backups
-
-Documentar procedimientos de recuperación de desastres
-
-Largo Plazo
-Evaluar estrategia de backup off-site
-
-Implementar encriptación de backups sensibles
-
-Automatización completa del pipeline de backup
-
-📝 Conclusión General
-La gestión completa del disco WD Blue SSD demostró un enfoque metódico y seguro:
-
-Desde la investigación forense inicial hasta la implementación del sistema de backup, cada fase fue documentada y ejecutada con precisión. El incidente crítico de arranque, aunque inesperado, fue resuelto eficientemente gracias al diagnóstico acertado y la aplicación de soluciones técnicas apropiadas.
-
-Resultados clave:
-
-✅ Disco WD Blue analizado, formateado y preparado correctamente
-
-✅ Sistema Proxmox recuperado y estabilizado
-
-✅ Sistema de backup implementado y verificado
-
-✅ Documentación completa generada
-
-✅ Lecciones aprendidas incorporadas a procedimientos
-
-Estado general del sistema: ✅ OPTIMO
-
-Disposición del hardware:
-
-Proxmox: Estable, sin dependencias externas críticas
-
-WD Blue: En Windows 10 Pro, funcionando como destino de backup
-
-Conectividad: Rclone operativo para sincronización cross-platform
+---
