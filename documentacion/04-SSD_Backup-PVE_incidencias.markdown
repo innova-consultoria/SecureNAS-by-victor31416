@@ -55,12 +55,12 @@ echo "/dev/sde1 /mnt/pve_bkp ntfs defaults 0 2" >> /etc/fstab
 
 ### 📊 Pruebas de rendimiento
 
-- Se realizan pruebas con `fio`.
+- Se realizan varias pruebas de 'S.M.A.R.T' y de estrés con `fio`.
 - Resultado: disco estable y listo para producción.
 
 ---
 
-## 🔁 FASE 3: RETORNO A WINDOWS 10 PRO
+## 🔁 FASE 3: RETORNO A WINDOWS 10 PRO (DESTINO BKP DE PROXMOX)
 
 - Se desconecta el disco de Proxmox y se vuelve a conectar al MiniPC por SATA III.
 - Se verifica que el disco está vacío y formateado en NTFS.
@@ -74,6 +74,7 @@ echo "/dev/sde1 /mnt/pve_bkp ntfs defaults 0 2" >> /etc/fstab
 
 - El sistema no arranca debido a una dependencia residual en `/etc/fstab`.
 - El disco `/dev/sde1` no está presente y el sistema entra en modo emergencia.
+- Aún habiendo desmontado y expulsado correctamente SSD WD, el sistema lo intenta localizar en el arranque. 
 
 ### 🧭 Diagnóstico
 
