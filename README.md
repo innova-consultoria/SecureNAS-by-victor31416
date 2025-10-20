@@ -3,18 +3,20 @@
 
 ![Estado](https://img.shields.io/badge/estado-en%20desarrollo-yellow) ![Colaboraciones](https://img.shields.io/badge/colaboraciones-abiertas-green) ![Licencia](https://img.shields.io/badge/licencia-GPL--3.0-blue) 
 
+![Última Actualización](https://img.shields.io/badge/Última%20Actualización-1%20día-brightgreen)
 
 **Proyecto creado por Innova Consultoría (Madrid) con la colaboración de victor31416.**  
 Repositorio: [https://github.com/innova-consultoria/SecureNAS-by-victor31416](https://github.com/innova-consultoria/SecureNAS-by-victor31416)
 
-## Descripción
+## SNAS, ser dueñ@ de tu propio cielo.
 
-SecureNAS es un servidor NAS profesional basado en hardware de más de 15 años y software 100% open-source, diseñado para tener la máxima seguridad, total privacidad y control de los datos sin dependender de nadie. Entre otras aspectos, implementa zero trust (solo WireGuard expuesto), cifrado AES-256, aislamiento de servicios (LXCs, VLANs) y backups 3-2-1. Y otro de los aspectos imprescindibles es que fuera compatible con Linux (cualquier distribución), Windows, macOS, Android e iOS. SNAS, ser dueñ@ de tu propio cielo.
+SecureNAS es un servidor NAS profesional basado (en fase de pruebas y desarrollo) en hardware de más de 15 años y software 100% open-source, diseñado para tener la máxima seguridad, total privacidad y control de los datos sin dependender de nadie (entiendase "nadie" como de ningun "operador" que tengas que cederle los datos).
+Como definición mas técnica; entre otras aspectos, implementa zero trust (solo WireGuard expuesto), cifrado AES-256, aislamiento de servicios (LXCs, VLANs) y backups 3-2-1. Otro de los aspectos imprescindibles es que es compatible con todos los pcs y smartphones actuales, desde Linux (cualquier distribución), Windows, macOS a iOS y Android. 
 
-## Características Principales de Diseño
+## Características Principales de Diseño en fase de pruebas.
 
 - **Hipervisor**: Proxmox VE (Debian-based, GPL).
-- **Almacenamiento**: SSD Samsung EVO 250 GB (sistema), ZFS RAIDZ1 (3x 4TB HDD Seagate IronWolf, cifrado AES-256), WD SSD 500 GB cifrado AES-256 en Windows 10 Pro (como bkp respaldo)
+- **Almacenamiento**: SSD Samsung EVO 250 GB (sistema), ZFS RAIDZ1 (3x 4TB HDD Seagate IronWolf, cifrado AES-256), WD SSD 500 GB cifrado AES-256 en Windows 10 Pro (como bkp respaldo).
 - **VPN**: WireGuard (UDP 51820, zero trust).
 - **Servicios**: Nextcloud (almacenamiento, ofimatica, videollamada, calendario, nube compartida..., sync, 2FA, CSP), AdGuard Home (DNS/DHCP).
 - **Backups**: 3-2-1 con BorgBackup, Rclone, Clonezilla, ZFS snapshots, sync a WD SSD 500 GB en Windows 10 Pro.
