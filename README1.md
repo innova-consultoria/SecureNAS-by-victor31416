@@ -12,12 +12,12 @@ SecureNAS es un servidor NAS profesional basado en software 100% open-source, di
 ## Características Principales de Diseño
 
 - **Hipervisor**: Proxmox VE (Debian-based, GPL).
-- **Almacenamiento**: ZFS RAIDZ1 (3x 4TB HDD Seagate IronWolf, cifrado AES-256).
+- **Almacenamiento**: SSD Samsung EVO 250 GB (sistema), ZFS RAIDZ1 (3x 4TB HDD Seagate IronWolf, cifrado AES-256), WD SSD 500 GB cifrado AES-256 en Windows 10 Pro (como bkp respaldo)
 - **VPN**: WireGuard (UDP 51820, zero trust).
-- **Servicios**: Nextcloud (almacenamiento, ofimatica, videollamada, calendario..., sync, 2FA, CSP), AdGuard Home (DNS/DHCP).
-- **Backups**: 3-2-1 con BorgBackup, Rclone, ZFS snapshots, sync a WD SSD 500 GB.
+- **Servicios**: Nextcloud (almacenamiento, ofimatica, videollamada, calendario, nube compartida..., sync, 2FA, CSP), AdGuard Home (DNS/DHCP).
+- **Backups**: 3-2-1 con BorgBackup, Rclone, Clonezilla, ZFS snapshots, sync a WD SSD 500 GB en Windows 10 Pro.
 - **Hardware**: Intel Core i7-6700, 16 GB RAM, SSD Samsung EVO 250 GB (sistema).
-- **Red**: Gestión SSH en 192.168.1.76, dominio live.esimportante.es (DDNS No-IP).
+- **Red**: Gestión SSH en 192.168.1.XX, dominio XX.esimportante.es (DDNS No-IP).
 
 ## Estructura del Repositorio
 
@@ -30,7 +30,7 @@ SecureNAS es un servidor NAS profesional basado en software 100% open-source, di
 
 - **Hardware**: 
   - CPU: Intel Core i7-6700 (4 cores/8 threads).
-  - RAM: 16 GB (recomendado 4 GB para Nextcloud LXC).
+  - RAM: 16 GB (aplicados 4 GB para Nextcloud LXC).
   - Discos: 3x 4TB HDD (RAIDZ1), SSD Samsung 250 GB (sistema), WD 500 GB (backups).
   - Red: Bridge vmbr0, VLAN-aware, IP 192.168.1.XX.
 - **Software**: Proxmox VE 9, Debian 12/13 LXCs, herramientas GPL (WireGuard, Nextcloud, BorgBackup).
