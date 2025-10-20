@@ -75,9 +75,9 @@ Capacidad: 7.14 TB usable
 Estado: ONLINE - ÓPTIMO
 
 # Discos verificados:
-/dev/sdb - ST4000VN006 - ZW63A3YJ - 1,460 horas - ✅ HEALTHY
-/dev/sdc - ST4000VN006 - ZW639X9J - 1,411 horas - ✅ HEALTHY  
-/dev/sdd - ST4000VN006 - ZW63A2RB - 1,484 horas - ✅ HEALTHY
+/dev/sdb - ST4000VN006 - ZW63XXXX - 1,460 horas - ✅ HEALTHY
+/dev/sdc - ST4000VN006 - ZW63XXXX - 1,411 horas - ✅ HEALTHY  
+/dev/sdd - ST4000VN006 - ZW63XXXX - 1,484 horas - ✅ HEALTHY
 
 # Datasets configurados:
 nas/bkp     (4.00T)  # Backups
@@ -98,7 +98,7 @@ nas/nc      (3.00T)  # Nextcloud
 🔴 RIESGOS CRÍTICOS:
 - SSH en puerto predeterminado (22/tcp)
   - Exposición: Ataques automatizados
-  - Mitigación: Cambio inmediato a puerto 6022
+  - Mitigación: Cambio inmediato a puerto XX22
 - Configuración sudo sin contraseña para ZFS
   - Riesgo: Escalada de privilegios
   - Mitigación: Revisión de políticas sudo
@@ -126,7 +126,7 @@ nas/nc      (3.00T)  # Nextcloud
   # Port 6022
 
   # 2. Configuración firewall base
-  sudo iptables -A INPUT -p tcp --dport 6022 -j ACCEPT
+  sudo iptables -A INPUT -p tcp --dport XX22 -j ACCEPT
 
   # 3. Hardening SSH
   # PermitRootLogin no
@@ -134,14 +134,14 @@ nas/nc      (3.00T)  # Nextcloud
   ```
 - **Día 3-4: Firewall Principal**
   ```
-  # Implementar OPNsense en VM-100
+  # Implementar OPNsense en VM-101
   # - Configurar interfaces WAN/LAN
   # - Políticas base denegar todo/permitir específico
   # - VLANs de segregación
   ```
 - **Día 5-7: Servicio Crítico #1**
   ```
-  # Nextcloud en contenedor LXC
+  # Nextcloud en contenedor LXC ID 161
   # - Montar dataset nas/nc
   # - Configurar reverse proxy
   # - SSL/TLS con Let's Encrypt
@@ -155,7 +155,7 @@ nas/nc      (3.00T)  # Nextcloud
 ## Diagrama en texto
 ```
 ┌─────────────────┐    ┌──────────────────┐
-│   INTERNET      │    │  OPNsense VM-100 │
+│   INTERNET      │    │  OPNsense VM-101 │
 └────────┬────────┘    └─────────┬────────┘
          │                       │
 ┌────────┴────────┐              │
@@ -165,15 +165,13 @@ nas/nc      (3.00T)  # Nextcloud
          │                       │
     ┌────┴─────┐                 │
     │          │                 │
-┌───┴───┐  ┌───┴───┐           │
-│Nextcloud│ │WireGuard│         │
-│ LXC    │ │ LXC    │         │
-└────────┘ └────────┘         │
-                              │
-                      ┌───────┴───────┐
-                      │ ZFS Storage   │
-                      │ nas pool      │
-                      └───────────────┘
+┌───┴─────┐ ┌──┴──────┐          │
+│Nextcloud│ │WireGuard│          │
+│  LXC    │ │  LXC    │          │
+└─────────┘ └─────────┘  ┌───────┴───────┐
+                         │ ZFS Storage   │
+                         │ nas pool      │
+                         └───────────────┘
 ```
 
 # 7. Métricas de éxito y monitorización
@@ -228,3 +226,6 @@ Recomendación principal: Proceder con la Fase 1 (Seguridad Base) de forma inmed
 
 ## Validaciones finales
 El proyecto está perfectamente viable y con la metodología establecida alcanzará los objetivos de seguridad y funcionalidad planteados.
+
+
+Proyecto: https://github.com/innova-consultoria/SecureNAS-by-victor31416
