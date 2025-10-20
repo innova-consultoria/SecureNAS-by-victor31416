@@ -1,4 +1,10 @@
-# 🧩 Instalación y configuración de GitHub en Debian  
+# 🧩 INSTALACIÓN Y CONFIGURACIÓN (GitHub en Debian) 
+PROYECTO SNAS (Secure Network Attached Storage)
+
+📅 Fecha: 20 de octubre de 2025
+
+🔍 Auditoría realizada por: Consultoría Innova
+
 ## Guía técnica reproducible para sincronización local y remota
 
 Este documento explica cómo instalar Git, configurar el entorno local en Debian, y sincronizar un repositorio GitHub paso a paso. Está basado en la instalación real del proyecto SecureNAS en `/root/GitHub_SNAS/`.
