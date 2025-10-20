@@ -1,12 +1,12 @@
 # SecureNAS: El Servidor NAS más Seguro de Código Abierto
-¡Tus datos, tu territorio!
+¡Tus datos, tu territorio!®
 
 ![Estado](https://img.shields.io/badge/estado-en%20desarrollo-yellow) ![Colaboraciones](https://img.shields.io/badge/colaboraciones-abiertas-green) ![Licencia](https://img.shields.io/badge/licencia-GPL--3.0-blue) ![Última Actualización](https://img.shields.io/badge/Última%20Actualización-1%20día-brightgreen)
 
 **Proyecto creado por Innova Consultoría (Madrid) con la colaboración de victor31416.**  
 Repositorio: [https://github.com/innova-consultoria/SecureNAS-by-victor31416](https://github.com/innova-consultoria/SecureNAS-by-victor31416)
 
-## SNAS, ser dueñ@ de tu propio cielo.
+## SNAS®, ser dueñ@ de tu propio cielo.
 
 SecureNAS es un servidor NAS profesional basado (en fase de pruebas y desarrollo) en hardware de más de 15 años y software 100% open-source, diseñado para tener la máxima seguridad, total privacidad y control de los datos sin dependender de nadie (entiendase "nadie" como de ningun "operador" que tengas que cederle tus datos. ¡Vamos, que tú eres el producto!).
 Como definición mas técnica; entre otras aspectos, implementa zero trust (solo WireGuard expuesto), cifrado AES-256, aislamiento de servicios (LXCs, VLANs) y backups 3-2-1. Otro de los aspectos imprescindibles es que es compatible con todos los pcs y smartphones actuales, desde Linux (cualquier distribución), Windows, macOS a iOS y Android. 
@@ -29,7 +29,7 @@ SecureNAS se implementa en 5 fases + auditoría inicial, detalladas en [document
 - **Fase 3: Servicios Avanzados** - Opcionales (e.g., Jellyfin, Home Assistant).
 - **Fase 4: Optimización** - Rendimiento ZFS, backups off-site.
 - **Fase 5: Monitorización** - Netdata, Grafana.
-- 
+  
 ## Estructura del Repositorio
 
 - `docs/`: Guías, tarjetas técnicas (fases, comandos), auditorías hardware.
