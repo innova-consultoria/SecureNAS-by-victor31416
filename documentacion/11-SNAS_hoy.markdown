@@ -1,10 +1,9 @@
-# 🔐 INFORME EJECUTIVO ACTUALIZADO - PROYECTO SNAS (Secure Network Attached Storage)
+# 🔐 INFORME EJECUTIVO ACTUALIZADO
+PROYECTO SNAS (Secure Network Attached Storage)
 
-## Fecha de análisis
 📅 Fecha de Análisis: 20 de octubre de 2025
 
-## Autoría
-🔍 Realizado por: Consultor Senior DevOps & Seguridad
+🔍 Auditoría realizada por: Consultoría Innova
 
 # 1. Visión general del proyecto
 
@@ -34,7 +33,7 @@ El Proyecto SNAS es una iniciativa de infraestructura crítica que busca impleme
 - Objetivo: Fortificación del sistema base
 ```
 # Acciones críticas pendientes:
-- Cambio de puerto SSH (22 → 6022)
+- Cambio de puerto SSH (22 → XX22)
 - Configuración de fail2ban
 - Hardening de servicios base
 - Configuración de firewall (iptables/nftables)
