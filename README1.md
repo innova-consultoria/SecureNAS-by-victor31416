@@ -9,12 +9,12 @@ Repositorio: [https://github.com/innova-consultoria/SecureNAS-by-victor31416](ht
 
 SecureNAS es un servidor NAS profesional basado en software 100% open-source, diseñado para máxima seguridad, privacidad y control de datos. Implementa zero trust (solo WireGuard expuesto), cifrado AES-256, aislamiento de servicios (LXCs, VLANs) y backups 3-2-1. Compatible con Windows, macOS, Android, iOS.
 
-## Características Principales
+## Características Principales de Diseño
 
 - **Hipervisor**: Proxmox VE (Debian-based, GPL).
 - **Almacenamiento**: ZFS RAIDZ1 (3x 4TB HDD Seagate IronWolf, cifrado AES-256).
 - **VPN**: WireGuard (UDP 51820, zero trust).
-- **Servicios**: Nextcloud (almacenamiento, sync, 2FA, CSP), AdGuard Home (DNS/DHCP).
+- **Servicios**: Nextcloud (almacenamiento, ofimatica, videollamada, calendario..., sync, 2FA, CSP), AdGuard Home (DNS/DHCP).
 - **Backups**: 3-2-1 con BorgBackup, Rclone, ZFS snapshots, sync a WD SSD 500 GB.
 - **Hardware**: Intel Core i7-6700, 16 GB RAM, SSD Samsung EVO 250 GB (sistema).
 - **Red**: Gestión SSH en 192.168.1.76, dominio live.esimportante.es (DDNS No-IP).
@@ -26,13 +26,13 @@ SecureNAS es un servidor NAS profesional basado en software 100% open-source, di
 - `configs/`: Ejemplos YAML/INI (WireGuard, iptables).
 - `diagrams/`: Diagramas de red (PlantUML/ASCII).
 
-## Requisitos
+## Equipo utilizado (2008)
 
 - **Hardware**: 
   - CPU: Intel Core i7-6700 (4 cores/8 threads).
   - RAM: 16 GB (recomendado 4 GB para Nextcloud LXC).
   - Discos: 3x 4TB HDD (RAIDZ1), SSD Samsung 250 GB (sistema), WD 500 GB (backups).
-  - Red: Bridge vmbr0, VLAN-aware, IP 192.168.1.76.
+  - Red: Bridge vmbr0, VLAN-aware, IP 192.168.1.XX.
 - **Software**: Proxmox VE 9, Debian 12/13 LXCs, herramientas GPL (WireGuard, Nextcloud, BorgBackup).
 
 ## Guía de Instalación (Resumen)
@@ -58,9 +58,9 @@ SecureNAS es un servidor NAS profesional basado en software 100% open-source, di
 
 | Disco | Modelo | Cambio | SMART Antes | SMART Después | Notas |
 |-------|--------|--------|-------------|---------------|-------|
-| HDD1 (sda) | Seagate IronWolf 4TB | 15/10/2025 | Fallo: No responde | OK: 100% salud | Reemplazado |
-| SSD Sistema | Kingston 120 GB → Samsung EVO 250 GB | 18/10/2025 | 20% vida útil | OK: 98% salud | Mejora fiabilidad |
-| SSD Backups | WD 500 GB | Sin cambio | OK: 95% salud | N/A | Sync /nas/bkp/ a /mnt/pve_bkp/ |
+| HDD1 (sda) | Seagate IronWolf 4TB | 15/10/2025 | Fallo: No responde | OK: 100% salud | Reemplazados cables Sata III |
+| SSD Sistema | Kingston 120 GB → Samsung EVO 250 GB | 18/10/2025 | Kingston 20% vida útil | Samsung OK: 98% salud | Mejora fiabilidad con EVO 250 |
+| SSD Backups | WD 500 GB | Sin cambios | OK: 95% salud | Ubicado en PC local con Windows 10 Pro | Sync /nas/bkp/ a /mnt/pve_bkp/ |
 
 Ver [docs/Auditorias-Hardware.md](docs/Auditorias-Hardware.md) para detalles (`smartctl -a /dev/sdX`, FIO OK).
 
@@ -78,3 +78,4 @@ Este proyecto está licenciado bajo [GPL-3.0](LICENSE.md).
 
 - Email: innova.satmadrid@gmail.com
 - Issues: [https://github.com/innova-consultoria/SecureNAS-by-victor31416/issues](https://github.com/innova-consultoria/SecureNAS-by-victor31416/issues)
+  🩹 XX = Números o caracteres ocultos por privacidad o seguridad.
