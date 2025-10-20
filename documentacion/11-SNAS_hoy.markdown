@@ -1,7 +1,4 @@
-# Encabezado del informe
-
-## Título del proyecto
-🔐 INFORME EJECUTIVO - PROYECTO SNAS (Secure Network Attached Storage)
+# 🔐 INFORME EJECUTIVO ACTUALIZADO - PROYECTO SNAS (Secure Network Attached Storage)
 
 ## Fecha de análisis
 📅 Fecha de Análisis: 20 de octubre de 2025
