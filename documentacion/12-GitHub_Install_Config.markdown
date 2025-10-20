@@ -142,3 +142,7 @@ Agrega la siguiente línea para sincronizar cada día a las 03:00:
 - Repositorio: SecureNAS-by-victor31416
 - Rama principal: main
 - Autenticación: token personal GitHub
+
+Proyecto: https://github.com/innova-consultoria/SecureNAS-by-victor31416
+
+🩹 XX = Números o caracteres ocultos por privacidad o seguridad.
