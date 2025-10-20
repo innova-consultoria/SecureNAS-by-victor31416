@@ -20,7 +20,7 @@ SecureNAS es un servidor NAS profesional basado en software 100% open-source, di
 - **Red**: Gestión SSH en 192.168.1.XX, dominio XX.esimportante.es (DDNS No-IP).
 
 ## Plan Estratégico
-SecureNAS se implementa en 5 fases + auditoría inicial, detalladas en [documentacion/00-Plan_SNAS.md](documentacion/00-Plan_SNAS.md):
+SecureNAS se implementa en 5 fases + auditoría inicial, detalladas en [documentacion/00-Plan_SNAS.markdown](documentacion/00-Plan_SNAS.markdown):
 - **Fase 0: Auditoría** - Diagnóstico hardware/software (`smartctl`, `zpool status`).
 - **Fase 1: Seguridad Base** - Firewall (iptables), SSH, WireGuard.
 - **Fase 2: Servicios Core** - Nextcloud, AdGuard Home.
