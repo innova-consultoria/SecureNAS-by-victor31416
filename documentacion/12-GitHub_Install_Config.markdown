@@ -61,7 +61,7 @@ cd GitHub_SNAS
 🔐 Sustituye `<TOKEN>` por tu token personal. Ejemplo:
 
 ```bash
-https://ghp_abc123xyz456@github.com/innova-consultoria/SecureNAS-by-victor31416.git
+https://ghp_abcXXXXX123xyz456@github.com/innova-consultoria/SecureNAS-by-victor31416.git
 ```
 
 ## 6. Verificación del estado del repositorio
