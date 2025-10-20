@@ -1,4 +1,5 @@
 # SecureNAS: El Servidor NAS más Seguro de Código Abierto
+¡Tus datos, tu territorio!
 
 ![Estado](https://img.shields.io/badge/estado-en%20desarrollo-yellow) ![Colaboraciones](https://img.shields.io/badge/colaboraciones-abiertas-green) ![Licencia](https://img.shields.io/badge/licencia-GPL--3.0-blue) 
 
@@ -8,7 +9,7 @@ Repositorio: [https://github.com/innova-consultoria/SecureNAS-by-victor31416](ht
 
 ## Descripción
 
-SecureNAS es un servidor NAS profesional basado en software 100% open-source, diseñado para máxima seguridad, privacidad y control de datos. Implementa zero trust (solo WireGuard expuesto), cifrado AES-256, aislamiento de servicios (LXCs, VLANs) y backups 3-2-1. Compatible con Windows, macOS, Android, iOS.
+SecureNAS es un servidor NAS profesional basado en hardware de más de 15 años y software 100% open-source, diseñado para tener la máxima seguridad, total privacidad y control de los datos sin dependender de nadie. Entre otras aspectos, implementa zero trust (solo WireGuard expuesto), cifrado AES-256, aislamiento de servicios (LXCs, VLANs) y backups 3-2-1. Y otro de los aspectos imprescindibles es que fuera compatible con Linux (cualquier distribución), Windows, macOS, Android e iOS. SNAS, ser dueñ@ de tu propio cielo.
 
 ## Características Principales de Diseño
 
