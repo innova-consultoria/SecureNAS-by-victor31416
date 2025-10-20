@@ -10,7 +10,7 @@ Repositorio: [https://github.com/innova-consultoria/SecureNAS-by-victor31416](ht
 
 ## SNAS, ser dueñ@ de tu propio cielo.
 
-SecureNAS es un servidor NAS profesional basado (en fase de pruebas y desarrollo) en hardware de más de 15 años y software 100% open-source, diseñado para tener la máxima seguridad, total privacidad y control de los datos sin dependender de nadie (entiendase "nadie" como de ningun "operador" que tengas que cederle los datos).
+SecureNAS es un servidor NAS profesional basado (en fase de pruebas y desarrollo) en hardware de más de 15 años y software 100% open-source, diseñado para tener la máxima seguridad, total privacidad y control de los datos sin dependender de nadie (entiendase "nadie" como de ningun "operador" que tengas que cederle tus datos. ¡Vamos, que tú eres el producto!).
 Como definición mas técnica; entre otras aspectos, implementa zero trust (solo WireGuard expuesto), cifrado AES-256, aislamiento de servicios (LXCs, VLANs) y backups 3-2-1. Otro de los aspectos imprescindibles es que es compatible con todos los pcs y smartphones actuales, desde Linux (cualquier distribución), Windows, macOS a iOS y Android. 
 
 ## Características Principales de Diseño en fase de pruebas.
