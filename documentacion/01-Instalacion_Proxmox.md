@@ -23,7 +23,7 @@ Instalar y configurar Proxmox VE 9.0 en un SSD Samsung 860 EVO 250 GB con LVM-th
 - Configurado sistema base:
   - País: España.
   - Zona horaria: Madrid.
-  - IP: 192.168.1.x.
+  - IP: 192.168.1.XX.
   - Contraseña root establecida.
 
 ### Fase 2: Configuración Post-Instalación
@@ -45,8 +45,9 @@ Instalar y configurar Proxmox VE 9.0 en un SSD Samsung 860 EVO 250 GB con LVM-th
 - Diagnosticado ruido "tic, tic" (~8 segundos) en sda (XXXXXXXX), velocidad SATA 1.5 Gb/s.
 - Intercambiados cables SATA (sda → sdc, sdb → sda, sdc → sdb), corregida velocidad a 6.0 Gb/s.
 - Identificado ruido "cloc" (~5 segundos) en sdc (XXXXXXXX), probable head parking.
+- Backup completo realizado previamente en Seagate Ultra Touch 4TB.
 - Desactivada importación automática ZFS y destruido pool storage para estabilidad.
-- Backup completo en Seagate Ultra Touch 4TB.
+
 
 ## 💾 Estructura Final del Almacenamiento
 
@@ -67,12 +68,14 @@ Instalar y configurar Proxmox VE 9.0 en un SSD Samsung 860 EVO 250 GB con LVM-th
 **Discos IronWolf 4TB (sda, sdb, sdc)**:
 - SMART PASSED, velocidad 6.0 Gb/s, pendiente cable sdc.
 - Pool ZFS destruido, pendiente recreación con datasets:
-  - tank/encrypted/nextcloud: 3 TB.
-  - tank/encrypted/vms: 1 TB (200 GB por VM/LXC).
-  - tank/encrypted/backups: 4 TB.
+  - nas/nc: 4 TB y (200 GB por VM/LXC).
+  - nas/bkp: 3 TB.
+  - nas/comun: 110 GB.
 
 **WD Blue SA510 500 GiB**:
 - Dedicado a backups externos (rclone con cifrado end-to-end, detección udev).
+- Se cifra desde Debian y se coloca en equipo local 192.168.1.XXX con Windows 10 Pro.
+- Sincronizará la/s imagen/es Clonezilla y Snapshot del sistema en ese SSD externo.
 
 ## ✅ Estado Final del Sistema
 
@@ -84,14 +87,14 @@ Instalar y configurar Proxmox VE 9.0 en un SSD Samsung 860 EVO 250 GB con LVM-th
   - Swap: 8 GB activo, UUID actualizado.
   - Discos IronWolf: SMART PASSED, velocidad 6.0 Gb/s.
   - Backup: Completo en Seagate Ultra Touch 4TB.
-- **Problemas Pendientes**:
-  - Ruido "cloc" en sdc (probable head parking, verificar físicamente).
-  - Error vmbr0 en arranque (requiere Ctrl+D).
+- **Problemas resueltos**:
+  - Ruido "cloc" en sdc (probable head parking, verificado físicamente cables Sata III cambiados).
+  - Error vmbr0 en arranque (requiere Ctrl+D). Solventado con carga correcta de zpool.
 
 ## 🧠 Observaciones Técnicas
 
 - Proxmox VE 9.0 estable en SSD Samsung 860 EVO 250 GB, con LVM-thin optimizado para VMs/LXCs.
-- Discos IronWolf 4TB (sda, sdb, sdc) operativos tras corrección de velocidad SATA (1.5 Gb/s a 6.0 Gb/s) mediante intercambio de cables. Ruido "cloc" (~5 segundos) en sdc (XXXXXXXX) probablemente normal, pero cable debe reemplazarse.
+- Discos IronWolf 4TB (sda, sdb, sdc) operativos tras corrección de velocidad SATA (1.5 Gb/s a 6.0 Gb/s) mediante intercambio de cables. Ruido "cloc" (~5 segundos) en sdc (XXXXXXXX) probablemente normal, pero el cable se reemplaza.
 - Pool ZFS destruido para resolver bloqueos, backup asegura recuperación.
 - WD Blue SA510 500 GiB configurado para backups externos con cifrado (rclone crypt), accesible desde Windows 11/Debian/Proxmox via Samba/SFTP.
 - Red estable (1 Gbps), pero error vmbr0 requiere diagnóstico.
@@ -100,12 +103,9 @@ Instalar y configurar Proxmox VE 9.0 en un SSD Samsung 860 EVO 250 GB con LVM-th
 
 ## 🧩 Recomendaciones
 
-- Confirmar físicamente el ruido "cloc" en sdc (XXXXXXXX) con destornillador como estetoscopio.
-- Reemplazar cable SATA de sdc con cable SATA III de alta calidad (6 Gb/s, clips de seguridad).
-- Recrear pool ZFS con datasets: tank/encrypted/nextcloud (3 TB), tank/encrypted/vms (1 TB), tank/encrypted/backups (4 TB).
+- Recrear pool ZFS con datasets: nas/nc (4 TB), nas/bkp (3 TB), nas/comun (110 GB).
 - Configurar backups automáticos de Proxmox en WD Blue SA510 (rclone con cifrado, detección udev).
-- Diagnosticar error vmbr0 en arranque (revisar /etc/network/interfaces, logs).
-- Proceder con Fase 1 (hardening: usuarios no-root, SSH, OPNsense) tras resolver cable sdc.
+- Proceder con Fase 1 (hardening: usuarios no-root, SSH, OPNsense).
 - Mantener monitoreo SMART activo hasta configuración final del pool ZFS.
 
 ## 📋 Pruebas de Auditoría y Finales
@@ -126,13 +126,12 @@ Instalar y configurar Proxmox VE 9.0 en un SSD Samsung 860 EVO 250 GB con LVM-th
 ## 🚀 Próximos Pasos Recomendados
 
 - **Inmediatos**:
-  - Verificar ruido "cloc" en sdc y reemplazar cable.
   - Crear pool ZFS con datasets propuestos.
-  - Configurar primera LXC para Nextcloud (instalación limpia, Office/Talk).
+  - Configurar primera LXC para Nextcloud (instalación limpia, NextCloud con Office/Talk/etc).
 
 - **Configuración ZFS Sugerida**:
   - Pool: RAIDZ1 con sda, sdb, sdc.
-  - Datasets: tank/encrypted/nextcloud (3 TB), tank/encrypted/vms (1 TB), tank/encrypted/backups (4 TB).
+  - Datasets: nas/nc (4 TB), nas/bkp (3 TB), nas/comun (110 GB).
   - Propiedades: compression=lz4, atime=off, encryption=aes-256-gcm.
 
 Este documento forma parte del módulo técnico de instalación del proyecto SecureNAS.  
