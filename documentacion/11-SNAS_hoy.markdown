@@ -119,7 +119,7 @@ nas/nc      (3.00T)  # Nextcloud
   ```
   # 1. Cambio puerto SSH
   sudo nano /etc/ssh/sshd_config
-  # Port 6022
+  # Port XX22
 
   # 2. Configuración firewall base
   sudo iptables -A INPUT -p tcp --dport XX22 -j ACCEPT
@@ -225,3 +225,4 @@ El proyecto está perfectamente viable y con la metodología establecida alcanza
 
 
 Proyecto: https://github.com/innova-consultoria/SecureNAS-by-victor31416
+🩹 XX = Números o caracteres ocultos por privacidad o seguridad.
