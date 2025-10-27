@@ -1,7 +1,7 @@
 # SecureNAS: El Servidor NAS más Seguro de Código Abierto
 ¡Tus datos, tu territorio!
 
-![Estado](https://img.shields.io/badge/estado-en%20desarrollo-yellow) ![Colaboraciones](https://img.shields.io/badge/colaboraciones-abiertas-green) ![Licencia](https://img.shields.io/badge/licencia-GPL--3.0-blue) ![Última Actualización](https://img.shields.io/badge/Última%20Actualización-12%20horas-brightgreen)
+![Estado](https://img.shields.io/badge/estado-en%20desarrollo-yellow) ![Colaboraciones](https://img.shields.io/badge/colaboraciones-abiertas-green) ![Licencia](https://img.shields.io/badge/licencia-GPL--3.0-blue) ![Última Actualización](https://img.shields.io/badge/Última%20Actualización-2%20dias-brightgreen)
 
 **Proyecto creado por Innova Consultoría (Madrid) con la colaboración de victor31416.**  
 Repositorio: [https://github.com/innova-consultoria/SecureNAS-by-victor31416](https://github.com/innova-consultoria/SecureNAS-by-victor31416)
