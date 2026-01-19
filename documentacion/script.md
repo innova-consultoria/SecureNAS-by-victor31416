@@ -2359,3 +2359,4 @@ finally {
 # FIN DEL SCRIPT
 # ============================================
 
+Deepseek - v3 conversacion https://chat.deepseek.com/share/bbndqj5wa1oh6r4cnx
