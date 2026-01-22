@@ -1,0 +1,2592 @@
+# ============================================
+# AUDITORÍA FINAL MAESTRA - PowerShell Script
+# Integración Completa de Fases 1 a 5
+# Versión: 3.0.1 (MEJORADA)
+# Autor: victor 3,1416 (Ene'26)
+# ============================================
+
+<#====================================================================================================================
+                                  SECURENAS v3.2 - Configuración Inicial
+====================================================================================================================#>
+#region Configuración Inicial
+
+# ========================
+# VARIABLES GLOBALES
+# ========================
+$global:SecureNASVersion = "3.2"
+$global:ConfiguracionPath = "C:\SecureNAS\configuracion.json"
+$global:LogPath = "C:\SecureNAS\logs"
+$global:BackupPath = "C:\SecureNAS\backups"
+$global:ReglasPath = "C:\SecureNAS\reglas"
+
+# ========================
+# CONFIGURACIÓN DE COLORES
+# ========================
+$global:ColorExito = "Green"
+$global:ColorError = "Red"
+$global:ColorAdvertencia = "Yellow"
+$global:ColorInfo = "Cyan"
+
+# ========================
+# CONFIGURACIÓN DE MÓDULOS
+# ========================
+$global:ModulosRequeridos = @(
+    "ActiveDirectory",
+    "NetSecurity",
+    "SmbShare"
+)
+
+# ========================
+# FUNCIÓN DE INICIALIZACIÓN
+# ========================
+function Initialize-SecureNAS {
+    [CmdletBinding()]
+    param()
+
+    try {
+        Write-Host "=== SECURENAS v$global:SecureNASVersion ===" -ForegroundColor $global:ColorInfo
+        Write-Host "Inicializando entorno..." -ForegroundColor $global:ColorInfo
+        
+        # Verificar si estamos ejecutando como administrador
+        $esAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+        
+        if (-not $esAdmin) {
+            throw "Este script requiere privilegios de administrador. Ejecuta PowerShell como administrador."
+        }
+        
+        # Crear estructura de directorios
+        $directorios = @($global:LogPath, $global:BackupPath, $global:ReglasPath)
+        
+        foreach ($directorio in $directorios) {
+            if (-not (Test-Path $directorio)) {
+                New-Item -ItemType Directory -Path $directorio -Force | Out-Null
+                Write-Host "Directorio creado: $directorio" -ForegroundColor $global:ColorExito
+            }
+        }
+        
+        # Verificar módulos requeridos
+        Write-Host "Verificando módulos requeridos..." -ForegroundColor $global:ColorInfo
+        
+        foreach ($modulo in $global:ModulosRequeridos) {
+            if (-not (Get-Module -ListAvailable -Name $modulo)) {
+                throw "Módulo requerido no encontrado: $modulo"
+            }
+            
+            Import-Module $modulo -Force -ErrorAction Stop
+            Write-Host "Módulo cargado: $modulo" -ForegroundColor $global:ColorExito
+        }
+        
+        Write-Host "Inicialización completada exitosamente." -ForegroundColor $global:ColorExito
+        return $true
+        
+    } catch {
+        Write-Host "Error durante la inicialización: $_" -ForegroundColor $global:ColorError
+        Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor $global:ColorError
+        return $false
+    }
+}
+
+#endregion
+
+<#====================================================================================================================
+                                  SECURENAS v3.2 - Funciones de Logging
+====================================================================================================================#>
+#region Funciones de Logging
+
+# ========================
+# CONFIGURACIÓN DE LOGGING
+# ========================
+$global:LogLevels = @{
+    "DEBUG" = 1
+    "INFO" = 2
+    "WARNING" = 3
+    "ERROR" = 4
+}
+
+$global:CurrentLogLevel = $global:LogLevels["INFO"]
+
+# ========================
+# FUNCIONES DE LOGGING
+# ========================
+function Write-Log {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("DEBUG", "INFO", "WARNING", "ERROR")]
+        [string]$Level,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Message,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$LogFile = "SecureNAS.log"
+    )
+    
+    # Verificar nivel de log
+    $messageLevel = $global:LogLevels[$Level]
+    if ($messageLevel -lt $global:CurrentLogLevel) {
+        return
+    }
+    
+    # Crear entrada de log
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "$timestamp [$Level] - $Message"
+    
+    # Mostrar en consola con colores
+    switch ($Level) {
+        "ERROR" { Write-Host $logEntry -ForegroundColor $global:ColorError }
+        "WARNING" { Write-Host $logEntry -ForegroundColor $global:ColorAdvertencia }
+        "INFO" { Write-Host $logEntry -ForegroundColor $global:ColorInfo }
+        "DEBUG" { Write-Host $logEntry -ForegroundColor "Gray" }
+    }
+    
+    # Escribir en archivo de log
+    $logPath = Join-Path $global:LogPath $LogFile
+    
+    try {
+        Add-Content -Path $logPath -Value $logEntry -Encoding UTF8 -ErrorAction Stop
+    } catch {
+        Write-Host "Error escribiendo en log: $_" -ForegroundColor $global:ColorError
+    }
+}
+
+function Set-LogLevel {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("DEBUG", "INFO", "WARNING", "ERROR")]
+        [string]$Level
+    )
+    
+    try {
+        $global:CurrentLogLevel = $global:LogLevels[$Level]
+        Write-Log -Level "INFO" -Message "Nivel de log cambiado a: $Level"
+        return $true
+    } catch {
+        Write-Host "Error cambiando nivel de log: $_" -ForegroundColor $global:ColorError
+        return $false
+    }
+}
+
+function Get-LogFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$LogFile = "SecureNAS.log",
+        
+        [Parameter(Mandatory=$false)]
+        [int]$LastLines = 100
+    )
+    
+    $logPath = Join-Path $global:LogPath $LogFile
+    
+    try {
+        if (Test-Path $logPath) {
+            return Get-Content $logPath -Tail $LastLines -ErrorAction Stop
+        } else {
+            Write-Log -Level "WARNING" -Message "Archivo de log no encontrado: $logPath"
+            return $null
+        }
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error leyendo archivo de log: $_"
+        return $null
+    }
+}
+
+function Clear-Logs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [int]$DaysToKeep = 30
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Limpiando logs antiguos (más de $DaysToKeep días)..."
+        
+        $logFiles = Get-ChildItem $global:LogPath -Filter "*.log" -ErrorAction Stop
+        
+        $deletedCount = 0
+        foreach ($logFile in $logFiles) {
+            if ($logFile.LastWriteTime -lt (Get-Date).AddDays(-$DaysToKeep)) {
+                Remove-Item $logFile.FullName -Force -ErrorAction Stop
+                $deletedCount++
+            }
+        }
+        
+        Write-Log -Level "INFO" -Message "Logs limpiados: $deletedCount archivos eliminados"
+        return $deletedCount
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error limpiando logs: $_"
+        return -1
+    }
+}
+
+#endregion
+
+<#====================================================================================================================
+                                  SECURENAS v3.2 - Gestión de Configuración
+====================================================================================================================#>
+#region Gestión de Configuración
+
+# ========================
+# ESTRUCTURA DE CONFIGURACIÓN
+# ========================
+$global:ConfiguracionDefault = @{
+    "General" = @{
+        "ModoDepuracion" = $false
+        "Idioma" = "es-ES"
+        "IntervaloEscaneo" = 3600
+    }
+    "Red" = @{
+        "ServidorNAS" = "192.168.1.100"
+        "PuertoSMB" = 445
+        "TimeoutConexion" = 30
+    }
+    "Seguridad" = @{
+        "HabilitarFirewall" = $true
+        "RequerirAutenticacion" = $true
+        "NivelAuditoria" = "Alto"
+    }
+    "Backup" = @{
+        "HabilitarBackupAutomatico" = $true
+        "FrecuenciaBackup" = "Diario"
+        "RetencionBackups" = 7
+    }
+}
+
+# ========================
+# FUNCIONES DE CONFIGURACIÓN
+# ========================
+function Get-Configuracion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$Seccion,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Clave
+    )
+    
+    try {
+        Write-Log -Level "DEBUG" -Message "Obteniendo configuración: Seccion='$Seccion', Clave='$Clave'"
+        
+        # Cargar configuración desde archivo o usar valores por defecto
+        if (Test-Path $global:ConfiguracionPath) {
+            $configuracion = Get-Content $global:ConfiguracionPath -Raw | ConvertFrom-Json -ErrorAction Stop
+            Write-Log -Level "DEBUG" -Message "Configuración cargada desde archivo"
+        } else {
+            $configuracion = $global:ConfiguracionDefault
+            Write-Log -Level "INFO" -Message "Usando configuración por defecto (archivo no encontrado)"
+        }
+        
+        # Filtrar por sección y clave si se especifican
+        if (-not [string]::IsNullOrEmpty($Seccion)) {
+            if ($configuracion.$Seccion) {
+                if (-not [string]::IsNullOrEmpty($Clave)) {
+                    if ($configuracion.$Seccion.$Clave -ne $null) {
+                        return $configuracion.$Seccion.$Clave
+                    } else {
+                        Write-Log -Level "WARNING" -Message "Clave '$Clave' no encontrada en sección '$Seccion'"
+                        return $null
+                    }
+                }
+                return $configuracion.$Seccion
+            } else {
+                Write-Log -Level "WARNING" -Message "Sección '$Seccion' no encontrada en configuración"
+                return $null
+            }
+        }
+        
+        return $configuracion
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error obteniendo configuración: $_"
+        return $null
+    }
+}
+
+function Set-Configuracion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Seccion,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Clave,
+        
+        [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
+        $Valor
+    )
+    
+    try {
+        Write-Log -Level "DEBUG" -Message "Estableciendo configuración: $Seccion.$Clave = $Valor"
+        
+        # Cargar configuración existente o crear nueva
+        $configuracion = Get-Configuracion
+        
+        if (-not $configuracion) {
+            $configuracion = $global:ConfiguracionDefault
+        }
+        
+        # Verificar si la sección existe
+        if (-not $configuracion.$Seccion) {
+            $configuracion.$Seccion = @{}
+            Write-Log -Level "INFO" -Message "Sección '$Seccion' creada"
+        }
+        
+        # Establecer valor
+        $configuracion.$Seccion.$Clave = $Valor
+        
+        # Guardar configuración
+        $json = $configuracion | ConvertTo-Json -Depth 10 -Compress
+        $json | Out-File $global:ConfiguracionPath -Encoding UTF8 -Force
+        
+        Write-Log -Level "INFO" -Message "Configuración actualizada: $Seccion.$Clave"
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error estableciendo configuración: $_"
+        return $false
+    }
+}
+
+function Reset-Configuracion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [switch]$Forzar
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Restableciendo configuración a valores por defecto..."
+        
+        if ($Forzar) {
+            # Restablecer sin confirmación
+            $global:ConfiguracionDefault | ConvertTo-Json -Depth 10 | 
+                Out-File $global:ConfiguracionPath -Encoding UTF8 -Force
+            Write-Log -Level "INFO" -Message "Configuración restablecida (forzado)"
+            return $true
+        }
+        
+        # Pedir confirmación
+        Write-Host "¿Está seguro de restablecer la configuración a valores por defecto?" -ForegroundColor $global:ColorAdvertencia
+        Write-Host "Esto sobrescribirá TODAS las configuraciones personalizadas." -ForegroundColor $global:ColorAdvertencia
+        
+        $confirmacion = Read-Host "Escriba 'SI' para confirmar"
+        
+        if ($confirmacion -eq "SI") {
+            $global:ConfiguracionDefault | ConvertTo-Json -Depth 10 | 
+                Out-File $global:ConfiguracionPath -Encoding UTF8 -Force
+            Write-Log -Level "INFO" -Message "Configuración restablecida"
+            return $true
+        } else {
+            Write-Log -Level "INFO" -Message "Restablecimiento cancelado por el usuario"
+            return $false
+        }
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error restableciendo configuración: $_"
+        return $false
+    }
+}
+
+function Export-Configuracion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$RutaDestino,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$IncluirSensibles
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Exportando configuración a: $RutaDestino"
+        
+        $configuracion = Get-Configuracion
+        
+        if (-not $configuracion) {
+            throw "No se pudo obtener la configuración para exportar"
+        }
+        
+        # Filtrar datos sensibles si no se incluyen
+        if (-not $IncluirSensibles) {
+            if ($configuracion.Red) {
+                if ($configuracion.Red.ContainsKey("Credenciales")) {
+                    $configuracion.Red.Remove("Credenciales")
+                }
+                if ($configuracion.Red.ContainsKey("Password")) {
+                    $configuracion.Red.Remove("Password")
+                }
+            }
+        }
+        
+        # Exportar a JSON
+        $configuracion | ConvertTo-Json -Depth 10 | 
+            Out-File $RutaDestino -Encoding UTF8 -Force
+        
+        Write-Log -Level "INFO" -Message "Configuración exportada exitosamente"
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error exportando configuración: $_"
+        return $false
+    }
+}
+
+function Import-Configuracion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({
+            if (-not (Test-Path $_)) {
+                throw "El archivo no existe: $_"
+            }
+            return $true
+        })]
+        [string]$RutaOrigen,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Sobrescribir
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Importando configuración desde: $RutaOrigen"
+        
+        # Leer configuración desde archivo
+        $configuracionImportada = Get-Content $RutaOrigen -Raw | ConvertFrom-Json -ErrorAction Stop
+        
+        if (-not $configuracionImportada) {
+            throw "El archivo de configuración está vacío o es inválido"
+        }
+        
+        # Cargar configuración actual
+        $configuracionActual = Get-Configuracion
+        
+        if (-not $configuracionActual) {
+            $configuracionActual = $global:ConfiguracionDefault
+        }
+        
+        # Fusionar configuraciones
+        if ($Sobrescribir) {
+            $configuracionFinal = $configuracionImportada
+        } else {
+            $configuracionFinal = $configuracionActual
+            
+            # Fusionar recursivamente
+            foreach ($seccion in $configuracionImportada.PSObject.Properties.Name) {
+                if (-not $configuracionFinal.$seccion) {
+                    $configuracionFinal.$seccion = $configuracionImportada.$seccion
+                } else {
+                    foreach ($clave in $configuracionImportada.$seccion.PSObject.Properties.Name) {
+                        $configuracionFinal.$seccion.$clave = $configuracionImportada.$seccion.$clave
+                    }
+                }
+            }
+        }
+        
+        # Guardar configuración fusionada
+        $configuracionFinal | ConvertTo-Json -Depth 10 | 
+            Out-File $global:ConfiguracionPath -Encoding UTF8 -Force
+        
+        Write-Log -Level "INFO" -Message "Configuración importada exitosamente"
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error importando configuración: $_"
+        return $false
+    }
+}
+
+#endregion
+
+<#====================================================================================================================
+                                  SECURENAS v3.2 - Funciones de Red y SMB
+====================================================================================================================#>
+#region Funciones de Red y SMB
+
+# ========================
+# FUNCIONES DE CONEXIÓN
+# ========================
+function Test-ConexionNAS {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$ServidorNAS,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$Puerto = 445,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$Timeout = 30
+    )
+    
+    try {
+        if ([string]::IsNullOrEmpty($ServidorNAS)) {
+            $ServidorNAS = Get-Configuracion -Seccion "Red" -Clave "ServidorNAS"
+            if ([string]::IsNullOrEmpty($ServidorNAS)) {
+                throw "No se especificó servidor NAS y no hay configuración guardada"
+            }
+        }
+        
+        Write-Log -Level "INFO" -Message "Probando conexión con NAS: $ServidorNAS (Puerto: $Puerto)"
+        
+        # Verificar si el servidor está activo
+        $resultadoPing = Test-Connection -ComputerName $ServidorNAS -Count 2 -Quiet -ErrorAction Stop
+        
+        if (-not $resultadoPing) {
+            Write-Log -Level "ERROR" -Message "No se puede hacer ping al servidor NAS: $ServidorNAS"
+            return $false
+        }
+        
+        # Verificar puerto SMB
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $connectTask = $tcpClient.ConnectAsync($ServidorNAS, $Puerto)
+        
+        # Esperar con timeout
+        $completed = $connectTask.Wait($Timeout * 1000)
+        
+        if ($completed -and $tcpClient.Connected) {
+            $tcpClient.Close()
+            Write-Log -Level "INFO" -Message "Conexión SMB exitosa: $ServidorNAS:$Puerto"
+            return $true
+        } else {
+            if ($tcpClient.Connected) {
+                $tcpClient.Close()
+            }
+            Write-Log -Level "ERROR" -Message "No se puede conectar al puerto SMB: $ServidorNAS:$Puerto"
+            return $false
+        }
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error probando conexión NAS: $_"
+        return $false
+    }
+}
+
+function Get-CompartidosSMB {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$ServidorNAS
+    )
+    
+    try {
+        if ([string]::IsNullOrEmpty($ServidorNAS)) {
+            $ServidorNAS = Get-Configuracion -Seccion "Red" -Clave "ServidorNAS"
+            if ([string]::IsNullOrEmpty($ServidorNAS)) {
+                throw "No se especificó servidor NAS"
+            }
+        }
+        
+        Write-Log -Level "INFO" -Message "Obteniendo recursos compartidos SMB de: $ServidorNAS"
+        
+        # Obtener recursos compartidos
+        $compartidos = Get-SmbShare -CimSession $ServidorNAS -ErrorAction Stop | 
+            Where-Object { $_.Path -ne $null } |
+            Select-Object Name, Path, Description, CurrentUsers, ShareType
+        
+        if (-not $compartidos -or $compartidos.Count -eq 0) {
+            Write-Log -Level "WARNING" -Message "No se encontraron recursos compartidos en: $ServidorNAS"
+            return @()
+        }
+        
+        Write-Log -Level "INFO" -Message "Encontrados $($compartidos.Count) recursos compartidos"
+        return $compartidos
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error obteniendo recursos compartidos SMB: $_"
+        return @()
+    }
+}
+
+function New-CompartidoSMB {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Nombre,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Ruta,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Descripcion,
+        
+        [Parameter(Mandatory=$false)]
+        [string[]]$UsuariosPermitidos,
+        
+        [Parameter(Mandatory=$false)]
+        [ValidateSet("Lectura", "Escritura", "Completo")]
+        [string]$Permisos = "Lectura"
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Creando recurso compartido SMB: $Nombre (Ruta: $Ruta)"
+        
+        # Verificar que la ruta existe
+        if (-not (Test-Path $Ruta)) {
+            throw "La ruta no existe: $Ruta"
+        }
+        
+        # Verificar que no exista ya un compartido con ese nombre
+        $compartidoExistente = Get-SmbShare -Name $Nombre -ErrorAction SilentlyContinue
+        if ($compartidoExistente) {
+            throw "Ya existe un recurso compartido con el nombre: $Nombre"
+        }
+        
+        # Crear el recurso compartido
+        $params = @{
+            Name        = $Nombre
+            Path        = $Ruta
+            ErrorAction = "Stop"
+        }
+        
+        if (-not [string]::IsNullOrEmpty($Descripcion)) {
+            $params["Description"] = $Descripcion
+        }
+        
+        $nuevoCompartido = New-SmbShare @params
+        
+        # Configurar permisos
+        switch ($Permisos) {
+            "Lectura" {
+                $permiso = "Read"
+            }
+            "Escritura" {
+                $permiso = "Change"
+            }
+            "Completo" {
+                $permiso = "Full"
+            }
+        }
+        
+        if ($UsuariosPermitidos -and $UsuariosPermitidos.Count -gt 0) {
+            foreach ($usuario in $UsuariosPermitidos) {
+                Grant-SmbShareAccess -Name $Nombre -AccountName $usuario -AccessRight $permiso -Force
+            }
+        } else {
+            # Permisos por defecto: Todos lectura
+            Grant-SmbShareAccess -Name $Nombre -AccountName "Everyone" -AccessRight "Read" -Force
+        }
+        
+        Write-Log -Level "INFO" -Message "Recurso compartido creado exitosamente: $Nombre"
+        return $nuevoCompartido
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error creando recurso compartido SMB: $_"
+        return $null
+    }
+}
+
+function Remove-CompartidoSMB {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Nombre,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Forzar
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Eliminando recurso compartido SMB: $Nombre"
+        
+        # Verificar que existe
+        $compartido = Get-SmbShare -Name $Nombre -ErrorAction SilentlyContinue
+        if (-not $compartido) {
+            throw "No existe el recurso compartido: $Nombre"
+        }
+        
+        if ($Forzar) {
+            # Eliminar sin confirmación
+            Remove-SmbShare -Name $Nombre -Force -ErrorAction Stop
+            Write-Log -Level "INFO" -Message "Recurso compartido eliminado (forzado): $Nombre"
+            return $true
+        }
+        
+        # Pedir confirmación
+        Write-Host "¿Está seguro de eliminar el recurso compartido '$Nombre'?" -ForegroundColor $global:ColorAdvertencia
+        Write-Host "Ruta: $($compartido.Path)" -ForegroundColor $global:ColorAdvertencia
+        
+        $confirmacion = Read-Host "Escriba 'SI' para confirmar"
+        
+        if ($confirmacion -eq "SI") {
+            Remove-SmbShare -Name $Nombre -Force -ErrorAction Stop
+            Write-Log -Level "INFO" -Message "Recurso compartido eliminado: $Nombre"
+            return $true
+        } else {
+            Write-Log -Level "INFO" -Message "Eliminación cancelada por el usuario: $Nombre"
+            return $false
+        }
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error eliminando recurso compartido SMB: $_"
+        return $false
+    }
+}
+
+function Set-PermisosSMB {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$NombreCompartido,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Usuario,
+        
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("Lectura", "Escritura", "Completo", "Denegar")]
+        [string]$Permiso
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Configurando permisos SMB: $NombreCompartido -> $Usuario : $Permiso"
+        
+        # Verificar que existe el compartido
+        $compartido = Get-SmbShare -Name $NombreCompartido -ErrorAction SilentlyContinue
+        if (-not $compartido) {
+            throw "No existe el recurso compartido: $NombreCompartido"
+        }
+        
+        # Convertir permiso a formato SMB
+        switch ($Permiso) {
+            "Lectura" {
+                $permisoSMB = "Read"
+                $accion = "Grant"
+            }
+            "Escritura" {
+                $permisoSMB = "Change"
+                $accion = "Grant"
+            }
+            "Completo" {
+                $permisoSMB = "Full"
+                $accion = "Grant"
+            }
+            "Denegar" {
+                $permisoSMB = "Full"  # Para revocar permisos
+                $accion = "Revoke"
+            }
+        }
+        
+        if ($accion -eq "Grant") {
+            # Otorgar permiso
+            Grant-SmbShareAccess -Name $NombreCompartido -AccountName $Usuario -AccessRight $permisoSMB -Force
+            Write-Log -Level "INFO" -Message "Permiso otorgado: $Usuario -> $permisoSMB en $NombreCompartido"
+        } else {
+            # Revocar permiso
+            Revoke-SmbShareAccess -Name $NombreCompartido -AccountName $Usuario -Force
+            Write-Log -Level "INFO" -Message "Permiso revocado: $Usuario en $NombreCompartido"
+        }
+        
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error configurando permisos SMB: $_"
+        return $false
+    }
+}
+
+function Get-EstadisticasSMB {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$ServidorNAS
+    )
+    
+    try {
+        if ([string]::IsNullOrEmpty($ServidorNAS)) {
+            $ServidorNAS = Get-Configuracion -Seccion "Red" -Clave "ServidorNAS"
+            if ([string]::IsNullOrEmpty($ServidorNAS)) {
+                throw "No se especificó servidor NAS"
+            }
+        }
+        
+        Write-Log -Level "INFO" -Message "Obteniendo estadísticas SMB de: $ServidorNAS"
+        
+        $estadisticas = @{}
+        
+        # Obtener compartidos
+        $compartidos = Get-CompartidosSMB -ServidorNAS $ServidorNAS
+        
+        if ($compartidos.Count -eq 0) {
+            $estadisticas["Compartidos"] = 0
+            $estadisticas["UsuariosConectados"] = 0
+            $estadisticas["EspacioTotal"] = 0
+            return $estadisticas
+        }
+        
+        $estadisticas["Compartidos"] = $compartidos.Count
+        
+        # Calcular usuarios conectados
+        $usuariosConectados = 0
+        foreach ($compartido in $compartidos) {
+            $usuariosConectados += $compartido.CurrentUsers
+        }
+        $estadisticas["UsuariosConectados"] = $usuariosConectados
+        
+        # Calcular espacio total (aproximado)
+        $espacioTotal = 0
+        foreach ($compartido in $compartidos) {
+            if ($compartido.Path -and (Test-Path $compartido.Path)) {
+                $drive = Get-PSDrive -PSProvider FileSystem | Where-Object Root -like "$($compartido.Path.Substring(0,3))*"
+                if ($drive) {
+                    $espacioTotal += $drive.Used
+                }
+            }
+        }
+        $estadisticas["EspacioTotal"] = $espacioTotal
+        
+        # Obtener sesiones activas
+        try {
+            $sesiones = Get-SmbSession -CimSession $ServidorNAS -ErrorAction SilentlyContinue
+            $estadisticas["SesionesActivas"] = if ($sesiones) { $sesiones.Count } else { 0 }
+        } catch {
+            $estadisticas["SesionesActivas"] = 0
+        }
+        
+        Write-Log -Level "INFO" -Message "Estadísticas obtenidas: $($estadisticas | ConvertTo-Json -Compress)"
+        return $estadisticas
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error obteniendo estadísticas SMB: $_"
+        return @{}
+    }
+}
+
+#endregion
+
+<#====================================================================================================================
+                                  SECURENAS v3.2 - Funciones de Seguridad
+====================================================================================================================#>
+#region Funciones de Seguridad
+
+# ========================
+# CONFIGURACIÓN DE FIREWALL
+# ========================
+function Enable-FirewallNAS {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$ServidorNAS
+    )
+    
+    try {
+        if ([string]::IsNullOrEmpty($ServidorNAS)) {
+            $ServidorNAS = Get-Configuracion -Seccion "Red" -Clave "ServidorNAS"
+            if ([string]::IsNullOrEmpty($ServidorNAS)) {
+                throw "No se especificó servidor NAS"
+            }
+        }
+        
+        Write-Log -Level "INFO" -Message "Habilitando reglas de firewall para NAS: $ServidorNAS"
+        
+        # Crear reglas básicas de firewall
+        $reglasFirewall = @(
+            @{
+                Nombre = "SecureNAS-SMB-In"
+                Descripcion = "Permitir tráfico SMB hacia el NAS"
+                Puerto = 445
+                Direccion = "Inbound"
+                Accion = "Allow"
+            },
+            @{
+                Nombre = "SecureNAS-SMB-Out"
+                Descripcion = "Permitir tráfico SMB desde el NAS"
+                Puerto = 445
+                Direccion = "Outbound"
+                Accion = "Allow"
+            },
+            @{
+                Nombre = "SecureNAS-ICMP-In"
+                Descripcion = "Permitir ping hacia el NAS"
+                Protocolo = "ICMPv4"
+                Direccion = "Inbound"
+                Accion = "Allow"
+            }
+        )
+        
+        $reglasCreadas = 0
+        foreach ($regla in $reglasFirewall) {
+            try {
+                # Verificar si la regla ya existe
+                $reglaExistente = Get-NetFirewallRule -DisplayName $regla.Nombre -ErrorAction SilentlyContinue
+                
+                if (-not $reglaExistente) {
+                    $params = @{
+                        DisplayName = $regla.Nombre
+                        Description = $regla.Descripcion
+                        Enabled = "True"
+                        Direction = $regla.Direccion
+                        Action = $regla.Accion
+                        ErrorAction = "Stop"
+                    }
+                    
+                    if ($regla.ContainsKey("Puerto")) {
+                        $params["LocalPort"] = $regla.Puerto
+                        $params["Protocol"] = "TCP"
+                        New-NetFirewallRule @params
+                    } elseif ($regla.ContainsKey("Protocolo")) {
+                        $params["Protocol"] = $regla.Protocolo
+                        New-NetFirewallRule @params
+                    }
+                    
+                    $reglasCreadas++
+                    Write-Log -Level "DEBUG" -Message "Regla de firewall creada: $($regla.Nombre)"
+                } else {
+                    Write-Log -Level "DEBUG" -Message "Regla de firewall ya existe: $($regla.Nombre)"
+                }
+            } catch {
+                Write-Log -Level "WARNING" -Message "Error creando regla de firewall $($regla.Nombre): $_"
+            }
+        }
+        
+        Write-Log -Level "INFO" -Message "Firewall configurado: $reglasCreadas reglas creadas/actualizadas"
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error habilitando firewall NAS: $_"
+        return $false
+    }
+}
+
+function Disable-FirewallNAS {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [switch]$Completo
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Deshabilitando reglas de firewall de SecureNAS"
+        
+        if ($Completo) {
+            # Deshabilitar todas las reglas de SecureNAS
+            $reglasSecureNAS = Get-NetFirewallRule | Where-Object { $_.DisplayName -like "SecureNAS-*" }
+            
+            if ($reglasSecureNAS) {
+                $reglasSecureNAS | Set-NetFirewallRule -Enabled False
+                Write-Log -Level "INFO" -Message "Deshabilitadas $($reglasSecureNAS.Count) reglas de firewall"
+            } else {
+                Write-Log -Level "INFO" -Message "No se encontraron reglas de firewall de SecureNAS"
+            }
+        } else {
+            # Solo deshabilitar las reglas básicas
+            $reglasBasicas = @("SecureNAS-SMB-In", "SecureNAS-SMB-Out", "SecureNAS-ICMP-In")
+            
+            foreach ($reglaNombre in $reglasBasicas) {
+                try {
+                    Set-NetFirewallRule -DisplayName $reglaNombre -Enabled False -ErrorAction SilentlyContinue
+                    Write-Log -Level "DEBUG" -Message "Regla deshabilitada: $reglaNombre"
+                } catch {
+                    Write-Log -Level "DEBUG" -Message "No se pudo deshabilitar regla: $reglaNombre"
+                }
+            }
+            
+            Write-Log -Level "INFO" -Message "Reglas básicas de firewall deshabilitadas"
+        }
+        
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error deshabilitando firewall NAS: $_"
+        return $false
+    }
+}
+
+# ========================
+# AUDITORÍA DE SEGURIDAD
+# ========================
+function Start-AuditoriaSeguridad {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [ValidateSet("Bajo", "Medio", "Alto")]
+        [string]$Nivel = "Alto"
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Iniciando auditoría de seguridad (Nivel: $Nivel)"
+        
+        $resultadoAuditoria = @{
+            Fecha = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            Nivel = $Nivel
+            Checks = @()
+            Errores = @()
+            Advertencias = @()
+            Recomendaciones = @()
+        }
+        
+        # 1. Verificar firewall
+        Write-Log -Level "DEBUG" -Message "Verificando configuración de firewall..."
+        
+        $reglasSecureNAS = Get-NetFirewallRule | Where-Object { $_.DisplayName -like "SecureNAS-*" -and $_.Enabled -eq "True" }
+        $checkFirewall = @{
+            Nombre = "Firewall"
+            Estado = if ($reglasSecureNAS.Count -ge 2) { "OK" } else { "ERROR" }
+            Detalles = "Reglas activas: $($reglasSecureNAS.Count)"
+        }
+        
+        $resultadoAuditoria.Checks += $checkFirewall
+        
+        if ($checkFirewall.Estado -eq "ERROR") {
+            $resultadoAuditoria.Errores += "Firewall: Menos de 2 reglas SecureNAS activas"
+            $resultadoAuditoria.Recomendaciones += "Ejecutar Enable-FirewallNAS para configurar reglas básicas"
+        }
+        
+        # 2. Verificar recursos compartidos
+        Write-Log -Level "DEBUG" -Message "Verificando recursos compartidos..."
+        
+        $compartidos = Get-CompartidosSMB
+        $compartidosPublicos = $compartidos | Where-Object { 
+            $permisos = Get-SmbShareAccess -Name $_.Name
+            $permisos | Where-Object { $_.AccountName -eq "Everyone" -and $_.AccessRight -ne "Read" }
+        }
+        
+        $checkCompartidos = @{
+            Nombre = "Recursos Compartidos"
+            Estado = if ($compartidosPublicos.Count -eq 0) { "OK" } else { "ADVERTENCIA" }
+            Detalles = "Compartidos públicos con permisos elevados: $($compartidosPublicos.Count)"
+        }
+        
+        $resultadoAuditoria.Checks += $checkCompartidos
+        
+        if ($checkCompartidos.Estado -eq "ADVERTENCIA") {
+            $resultadoAuditoria.Advertencias += "Recursos compartidos: Se encontraron compartidos públicos con permisos elevados"
+            $resultadoAuditoria.Recomendaciones += "Revisar permisos de recursos compartidos con Get-CompartidosSMB"
+        }
+        
+        # 3. Verificar conexiones activas (solo nivel Alto)
+        if ($Nivel -eq "Alto") {
+            Write-Log -Level "DEBUG" -Message "Verificando conexiones activas..."
+            
+            $conexiones = Get-NetTCPConnection -LocalPort 445 -State Established -ErrorAction SilentlyContinue
+            
+            $checkConexiones = @{
+                Nombre = "Conexiones SMB"
+                Estado = if ($conexiones.Count -le 10) { "OK" } else { "ADVERTENCIA" }
+                Detalles = "Conexiones SMB establecidas: $($conexiones.Count)"
+            }
+            
+            $resultadoAuditoria.Checks += $checkConexiones
+            
+            if ($checkConexiones.Estado -eq "ADVERTENCIA") {
+                $resultadoAuditoria.Advertencias += "Conexiones SMB: Más de 10 conexiones establecidas"
+                $resultadoAuditoria.Recomendaciones += "Investigar conexiones SMB activas con Get-NetTCPConnection"
+            }
+        }
+        
+        # 4. Verificar actualizaciones (solo nivel Alto)
+        if ($Nivel -eq "Alto") {
+            Write-Log -Level "DEBUG" -Message "Verificando estado de actualizaciones..."
+            
+            try {
+                $session = New-Object -ComObject Microsoft.Update.Session
+                $searcher = $session.CreateUpdateSearcher()
+                $result = $searcher.Search("IsInstalled=0 and Type='Software'")
+                
+                $checkActualizaciones = @{
+                    Nombre = "Actualizaciones Pendientes"
+                    Estado = if ($result.Updates.Count -eq 0) { "OK" } else { "ADVERTENCIA" }
+                    Detalles = "Actualizaciones pendientes: $($result.Updates.Count)"
+                }
+            } catch {
+                $checkActualizaciones = @{
+                    Nombre = "Actualizaciones Pendientes"
+                    Estado = "ERROR"
+                    Detalles = "No se pudo verificar actualizaciones"
+                }
+                $resultadoAuditoria.Errores += "No se pudo verificar actualizaciones del sistema"
+            }
+            
+            $resultadoAuditoria.Checks += $checkActualizaciones
+            
+            if ($checkActualizaciones.Estado -eq "ADVERTENCIA") {
+                $resultadoAuditoria.Advertencias += "Actualizaciones: Hay actualizaciones de seguridad pendientes"
+                $resultadoAuditoria.Recomendaciones += "Instalar actualizaciones pendientes de Windows"
+            }
+        }
+        
+        # Guardar resultado de auditoría
+        $fechaArchivo = Get-Date -Format "yyyyMMdd_HHmmss"
+        $rutaAuditoria = Join-Path $global:LogPath "auditoria_${fechaArchivo}.json"
+        
+        $resultadoAuditoria | ConvertTo-Json -Depth 5 | Out-File $rutaAuditoria -Encoding UTF8
+        
+        Write-Log -Level "INFO" -Message "Auditoría completada. Resultados guardados en: $rutaAuditoria"
+        Write-Log -Level "INFO" -Message "Resumen: $($resultadoAuditoria.Checks.Count) checks, $($resultadoAuditoria.Errores.Count) errores, $($resultadoAuditoria.Advertencias.Count) advertencias"
+        
+        return $resultadoAuditoria
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error en auditoría de seguridad: $_"
+        return $null
+    }
+}
+
+function Get-ReporteSeguridad {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [int]$Dias = 7
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Generando reporte de seguridad de los últimos $Dias días"
+        
+        # Buscar archivos de auditoría
+        $archivosAuditoria = Get-ChildItem $global:LogPath -Filter "auditoria_*.json" |
+            Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-$Dias) } |
+            Sort-Object LastWriteTime -Descending
+        
+        if ($archivosAuditoria.Count -eq 0) {
+            Write-Log -Level "WARNING" -Message "No se encontraron archivos de auditoría en los últimos $Dias días"
+            return $null
+        }
+        
+        $reporteConsolidado = @{
+            Periodo = "$Dias días"
+            TotalAuditorias = $archivosAuditoria.Count
+            FechaInicio = ($archivosAuditoria[-1].LastWriteTime).ToString("yyyy-MM-dd")
+            FechaFin = ($archivosAuditoria[0].LastWriteTime).ToString("yyyy-MM-dd")
+            Resumen = @{
+                Errores = 0
+                Advertencias = 0
+                ChecksOK = 0
+                ChecksTotal = 0
+            }
+            Tendencia = @()
+            ProblemasComunes = @()
+        }
+        
+        # Analizar cada auditoría
+        $problemasFrecuentes = @{}
+        
+        foreach ($archivo in $archivosAuditoria) {
+            try {
+                $auditoria = Get-Content $archivo.FullName -Raw | ConvertFrom-Json
+                
+                # Contar estadísticas
+                $reporteConsolidado.Resumen.ChecksTotal += $auditoria.Checks.Count
+                
+                foreach ($check in $auditoria.Checks) {
+                    if ($check.Estado -eq "OK") {
+                        $reporteConsolidado.Resumen.ChecksOK++
+                    }
+                }
+                
+                $reporteConsolidado.Resumen.Errores += $auditoria.Errores.Count
+                $reporteConsolidado.Resumen.Advertencias += $auditoria.Advertencias.Count
+                
+                # Registrar problemas comunes
+                foreach ($error in $auditoria.Errores) {
+                    $key = $error.Split(':')[0].Trim()
+                    if ($problemasFrecuentes.ContainsKey($key)) {
+                        $problemasFrecuentes[$key]++
+                    } else {
+                        $problemasFrecuentes[$key] = 1
+                    }
+                }
+                
+                foreach ($advertencia in $auditoria.Advertencias) {
+                    $key = $advertencia.Split(':')[0].Trim()
+                    if ($problemasFrecuentes.ContainsKey($key)) {
+                        $problemasFrecuentes[$key]++
+                    } else {
+                        $problemasFrecuentes[$key] = 1
+                    }
+                }
+                
+                # Agregar a tendencia
+                $reporteConsolidado.Tendencia += @{
+                    Fecha = $archivo.LastWriteTime.ToString("yyyy-MM-dd")
+                    Errores = $auditoria.Errores.Count
+                    Advertencias = $auditoria.Advertencias.Count
+                    ChecksOK = ($auditoria.Checks | Where-Object { $_.Estado -eq "OK" }).Count
+                }
+            } catch {
+                Write-Log -Level "WARNING" -Message "Error procesando archivo de auditoría $($archivo.Name): $_"
+            }
+        }
+        
+        # Calcular porcentajes
+        if ($reporteConsolidado.Resumen.ChecksTotal -gt 0) {
+            $reporteConsolidado.Resumen["PorcentajeOK"] = [math]::Round(($reporteConsolidado.Resumen.ChecksOK / $reporteConsolidado.Resumen.ChecksTotal) * 100, 2)
+        } else {
+            $reporteConsolidado.Resumen["PorcentajeOK"] = 0
+        }
+        
+        # Identificar problemas más comunes
+        $problemasFrecuentes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5 | ForEach-Object {
+            $reporteConsolidado.ProblemasComunes += @{
+                Problema = $_.Key
+                Frecuencia = $_.Value
+                Porcentaje = [math]::Round(($_.Value / $archivosAuditoria.Count) * 100, 2)
+            }
+        }
+        
+        # Guardar reporte
+        $fechaReporte = Get-Date -Format "yyyyMMdd_HHmmss"
+        $rutaReporte = Join-Path $global:LogPath "reporte_seguridad_${fechaReporte}.json"
+        
+        $reporteConsolidado | ConvertTo-Json -Depth 5 | Out-File $rutaReporte -Encoding UTF8
+        
+        Write-Log -Level "INFO" -Message "Reporte de seguridad generado: $rutaReporte"
+        Write-Log -Level "INFO" -Message "Resumen: $($reporteConsolidado.Resumen.PorcentajeOK)% OK, $($reporteConsolidado.Resumen.Errores) errores, $($reporteConsolidado.Resumen.Advertencias) advertencias"
+        
+        return $reporteConsolidado
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error generando reporte de seguridad: $_"
+        return $null
+    }
+}
+
+# ========================
+# DETECCIÓN DE INTRUSOS
+# ========================
+function Monitor-IntrusosSMB {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [int]$Intervalo = 300,  # 5 minutos
+        [Parameter(Mandatory=$false)]
+        [int]$Duracion = 3600   # 1 hora
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Iniciando monitoreo de intrusos SMB (Intervalo: ${Intervalo}s, Duración: ${Duracion}s)"
+        
+        $finMonitor = (Get-Date).AddSeconds($Duracion)
+        $ipsConocidas = @()
+        $intentosSospechosos = @{}
+        
+        # Obtener IPs conocidas (de la red local)
+        $ipLocal = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "*Loopback*" }).IPAddress
+        $subred = $ipLocal -replace '\.\d+$', '.*'
+        
+        while ((Get-Date) -lt $finMonitor) {
+            try {
+                # Obtener sesiones SMB activas
+                $sesiones = Get-SmbSession -ErrorAction SilentlyContinue
+                
+                foreach ($sesion in $sesiones) {
+                    $ipCliente = $sesion.ClientComputerName
+                    
+                    # Verificar si es una IP desconocida/sospechosa
+                    if ($ipCliente -notmatch $subred -and $ipCliente -notin $ipsConocidas) {
+                        
+                        if (-not $intentosSospechosos.ContainsKey($ipCliente)) {
+                            $intentosSospechosos[$ipCliente] = @{
+                                PrimerIntento = Get-Date
+                                UltimoIntento = Get-Date
+                                Intentos = 1
+                                Usuarios = @($sesion.ClientUserName)
+                            }
+                            
+                            Write-Log -Level "WARNING" -Message "IP sospechosa detectada: $ipCliente (Usuario: $($sesion.ClientUserName))"
+                        } else {
+                            $intentosSospechosos[$ipCliente].UltimoIntento = Get-Date
+                            $intentosSospechosos[$ipCliente].Intentos++
+                            
+                            if ($sesion.ClientUserName -notin $intentosSospechosos[$ipCliente].Usuarios) {
+                                $intentosSospechosos[$ipCliente].Usuarios += $sesion.ClientUserName
+                            }
+                            
+                            # Alertar si hay múltiples intentos
+                            if ($intentosSospechosos[$ipCliente].Intentos -ge 3) {
+                                Write-Log -Level "ERROR" -Message "Múltiples conexiones sospechosas desde $ipCliente (Intentos: $($intentosSospechosos[$ipCliente].Intentos))"
+                            }
+                        }
+                    }
+                }
+                
+                # Esperar antes de la siguiente verificación
+                Start-Sleep -Seconds $Intervalo
+                
+            } catch {
+                Write-Log -Level "WARNING" -Message "Error en ciclo de monitoreo: $_"
+                Start-Sleep -Seconds $Intervalo
+            }
+        }
+        
+        # Generar reporte final
+        $reporteIntrusos = @{
+            FechaInicio = $finMonitor.AddSeconds(-$Duracion)
+            FechaFin = $finMonitor
+            TotalIPsSospechosas = $intentosSospechosos.Count
+            IPsSospechosas = @()
+        }
+        
+        foreach ($ip in $intentosSospechosos.Keys) {
+            $info = $intentosSospechosos[$ip]
+            $reporteIntrusos.IPsSospechosas += @{
+                IP = $ip
+                Intentos = $info.Intentos
+                Usuarios = $info.Usuarios
+                PrimerIntento = $info.PrimerIntento.ToString("yyyy-MM-dd HH:mm:ss")
+                UltimoIntento = $info.UltimoIntento.ToString("yyyy-MM-dd HH:mm:ss")
+            }
+        }
+        
+        # Guardar reporte
+        $fechaReporte = Get-Date -Format "yyyyMMdd_HHmmss"
+        $rutaReporte = Join-Path $global:LogPath "intrusos_${fechaReporte}.json"
+        
+        $reporteIntrusos | ConvertTo-Json -Depth 3 | Out-File $rutaReporte -Encoding UTF8
+        
+        Write-Log -Level "INFO" -Message "Monitoreo completado. IPs sospechosas detectadas: $($reporteIntrusos.TotalIPsSospechosas)"
+        Write-Log -Level "INFO" -Message "Reporte guardado en: $rutaReporte"
+        
+        return $reporteIntrusos
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error en monitoreo de intrusos SMB: $_"
+        return $null
+    }
+}
+
+#endregion
+
+<#====================================================================================================================
+                                  SECURENAS v3.2 - Funciones de Backup
+====================================================================================================================#>
+#region Funciones de Backup
+
+# ========================
+# CONFIGURACIÓN DE BACKUP
+# ========================
+$global:EsquemaBackup = @{
+    "Diario" = @{
+        Intervalo = 86400  # 24 horas en segundos
+        MaxBackups = 7
+    }
+    "Semanal" = @{
+        Intervalo = 604800  # 7 días en segundos
+        MaxBackups = 4
+    }
+    "Mensual" = @{
+        Intervalo = 2592000  # 30 días en segundos
+        MaxBackups = 12
+    }
+}
+
+# ========================
+# FUNCIONES DE BACKUP
+# ========================
+function New-BackupConfiguracion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Nombre,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$RutaOrigen,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$RutaDestino,
+        
+        [Parameter(Mandatory=$false)]
+        [ValidateSet("Diario", "Semanal", "Mensual")]
+        [string]$Frecuencia = "Diario",
+        
+        [Parameter(Mandatory=$false)]
+        [string[]]$ExcluirPatrones = @("*.tmp", "*.log", "Thumbs.db")
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Creando configuración de backup: $Nombre"
+        
+        # Validar ruta de origen
+        if (-not (Test-Path $RutaOrigen)) {
+            throw "La ruta de origen no existe: $RutaOrigen"
+        }
+        
+        # Usar ruta por defecto si no se especifica
+        if ([string]::IsNullOrEmpty($RutaDestino)) {
+            $RutaDestino = Join-Path $global:BackupPath $Nombre
+        }
+        
+        # Crear directorio de destino si no existe
+        if (-not (Test-Path $RutaDestino)) {
+            New-Item -ItemType Directory -Path $RutaDestino -Force | Out-Null
+            Write-Log -Level "DEBUG" -Message "Directorio de backup creado: $RutaDestino"
+        }
+        
+        # Crear configuración
+        $configBackup = @{
+            Nombre = $Nombre
+            RutaOrigen = $RutaOrigen
+            RutaDestino = $RutaDestino
+            Frecuencia = $Frecuencia
+            ExcluirPatrones = $ExcluirPatrones
+            FechaCreacion = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            UltimoBackup = $null
+            Estado = "Activo"
+        }
+        
+        # Guardar configuración
+        $rutaConfig = Join-Path $global:BackupPath "${Nombre}_config.json"
+        $configBackup | ConvertTo-Json | Out-File $rutaConfig -Encoding UTF8
+        
+        Write-Log -Level "INFO" -Message "Configuración de backup guardada: $rutaConfig"
+        return $configBackup
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error creando configuración de backup: $_"
+        return $null
+    }
+}
+
+function Start-Backup {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$NombreConfig,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Forzar
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Iniciando backup: $NombreConfig"
+        
+        # Cargar configuración
+        $rutaConfig = Join-Path $global:BackupPath "${NombreConfig}_config.json"
+        
+        if (-not (Test-Path $rutaConfig)) {
+            throw "No se encontró la configuración de backup: $NombreConfig"
+        }
+        
+        $config = Get-Content $rutaConfig -Raw | ConvertFrom-Json
+        
+        # Verificar si es necesario hacer backup (a menos que se fuerce)
+        if (-not $Forzar -and $config.UltimoBackup) {
+            $ultimoBackupDate = [DateTime]::Parse($config.UltimoBackup)
+            $intervalo = $global:EsquemaBackup[$config.Frecuencia].Intervalo
+            $proximoBackup = $ultimoBackupDate.AddSeconds($intervalo)
+            
+            if ((Get-Date) -lt $proximoBackup) {
+                Write-Log -Level "INFO" -Message "Backup no necesario aún. Próximo: $proximoBackup"
+                return $false
+            }
+        }
+        
+        # Crear nombre único para el backup
+        $fechaBackup = Get-Date -Format "yyyyMMdd_HHmmss"
+        $nombreBackup = "${NombreConfig}_${fechaBackup}.zip"
+        $rutaBackup = Join-Path $config.RutaDestino $nombreBackup
+        
+        Write-Log -Level "INFO" -Message "Creando backup: $rutaBackup"
+        
+        # Crear archivo ZIP con los archivos
+        $excluirParam = @()
+        foreach ($patron in $config.ExcluirPatrones) {
+            $excluirParam += "-Exclude"
+            $excluirParam += $patron
+        }
+        
+        # Comprimir archivos
+        Compress-Archive -Path "$($config.RutaOrigen)\*" -DestinationPath $rutaBackup -CompressionLevel Optimal @excluirParam
+        
+        # Actualizar configuración
+        $config.UltimoBackup = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $config | ConvertTo-Json | Out-File $rutaConfig -Encoding UTF8
+        
+        # Registrar en log
+        $tamano = (Get-Item $rutaBackup).Length
+        Write-Log -Level "INFO" -Message "Backup completado: $nombreBackup ($([math]::Round($tamano / 1MB, 2)) MB)"
+        
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error ejecutando backup: $_"
+        return $false
+    }
+}
+
+function Get-Backups {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$NombreConfig,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$Ultimos = 10
+    )
+    
+    try {
+        Write-Log -Level "DEBUG" -Message "Obteniendo lista de backups: Config=$NombreConfig, Ultimos=$Ultimos"
+        
+        $backups = @()
+        
+        if (-not [string]::IsNullOrEmpty($NombreConfig)) {
+            # Buscar backups de una configuración específica
+            $rutaConfig = Join-Path $global:BackupPath "${NombreConfig}_config.json"
+            
+            if (Test-Path $rutaConfig) {
+                $config = Get-Content $rutaConfig -Raw | ConvertFrom-Json
+                $archivosBackup = Get-ChildItem $config.RutaDestino -Filter "*.zip" | 
+                    Sort-Object LastWriteTime -Descending |
+                    Select-Object -First $Ultimos
+                
+                foreach ($archivo in $archivosBackup) {
+                    $backups += [PSCustomObject]@{
+                        NombreConfig = $NombreConfig
+                        Archivo = $archivo.Name
+                        Ruta = $archivo.FullName
+                        Fecha = $archivo.LastWriteTime
+                        Tamano = $archivo.Length
+                        TamanoMB = [math]::Round($archivo.Length / 1MB, 2)
+                    }
+                }
+            }
+        } else {
+            # Buscar todos los backups
+            $configuraciones = Get-ChildItem $global:BackupPath -Filter "*_config.json"
+            
+            foreach ($configFile in $configuraciones) {
+                $nombreConfig = $configFile.Name -replace '_config\.json$', ''
+                
+                try {
+                    $config = Get-Content $configFile.FullName -Raw | ConvertFrom-Json
+                    $archivosBackup = Get-ChildItem $config.RutaDestino -Filter "*.zip" -ErrorAction SilentlyContinue | 
+                        Sort-Object LastWriteTime -Descending |
+                        Select-Object -First $Ultimos
+                    
+                    foreach ($archivo in $archivosBackup) {
+                        $backups += [PSCustomObject]@{
+                            NombreConfig = $nombreConfig
+                            Archivo = $archivo.Name
+                            Ruta = $archivo.FullName
+                            Fecha = $archivo.LastWriteTime
+                            Tamano = $archivo.Length
+                            TamanoMB = [math]::Round($archivo.Length / 1MB, 2)
+                        }
+                    }
+                } catch {
+                    Write-Log -Level "WARNING" -Message "Error procesando configuración $($configFile.Name): $_"
+                }
+            }
+        }
+        
+        Write-Log -Level "DEBUG" -Message "Encontrados $($backups.Count) backups"
+        return $backups
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error obteniendo backups: $_"
+        return @()
+    }
+}
+
+function Restore-Backup {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$RutaBackup,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$RutaDestino,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Sobrescribir
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Restaurando backup: $RutaBackup"
+        
+        # Verificar que el archivo de backup existe
+        if (-not (Test-Path $RutaBackup)) {
+            throw "El archivo de backup no existe: $RutaBackup"
+        }
+        
+        # Determinar ruta de destino
+        if ([string]::IsNullOrEmpty($RutaDestino)) {
+            # Extraer del nombre del archivo
+            $nombreConfig = (Split-Path $RutaBackup -Leaf) -replace '_\d{8}_\d{6}\.zip$', ''
+            $rutaConfig = Join-Path $global:BackupPath "${nombreConfig}_config.json"
+            
+            if (Test-Path $rutaConfig) {
+                $config = Get-Content $rutaConfig -Raw | ConvertFrom-Json
+                $RutaDestino = $config.RutaOrigen
+            } else {
+                throw "No se pudo determinar la ruta de destino. Especifique -RutaDestino"
+            }
+        }
+        
+        # Verificar ruta de destino
+        if (-not (Test-Path $RutaDestino)) {
+            New-Item -ItemType Directory -Path $RutaDestino -Force | Out-Null
+            Write-Log -Level "INFO" -Message "Directorio de destino creado: $RutaDestino"
+        }
+        
+        # Confirmar si hay archivos en destino (a menos que se sobreescriba)
+        $archivosEnDestino = Get-ChildItem $RutaDestino -ErrorAction SilentlyContinue
+        if ($archivosEnDestino.Count -gt 0 -and -not $Sobrescribir) {
+            Write-Host "Advertencia: El directorio destino no está vacío." -ForegroundColor $global:ColorAdvertencia
+            Write-Host "Contiene $($archivosEnDestino.Count) archivos/directorios." -ForegroundColor $global:ColorAdvertencia
+            
+            $confirmacion = Read-Host "¿Desea continuar? (SI/NO)"
+            if ($confirmacion -ne "SI") {
+                Write-Log -Level "INFO" -Message "Restauración cancelada por el usuario"
+                return $false
+            }
+        }
+        
+        # Extraer backup
+        Write-Log -Level "INFO" -Message "Extrayendo backup a: $RutaDestino"
+        Expand-Archive -Path $RutaBackup -DestinationPath $RutaDestino -Force
+        
+        Write-Log -Level "INFO" -Message "Backup restaurado exitosamente"
+        return $true
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error restaurando backup: $_"
+        return $false
+    }
+}
+
+function Remove-OldBackups {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$NombreConfig,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$Mantener = -1
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Limpiando backups antiguos: Config=$NombreConfig, Mantener=$Mantener"
+        
+        $totalEliminados = 0
+        $espacioLiberado = 0
+        
+        if (-not [string]::IsNullOrEmpty($NombreConfig)) {
+            # Limpiar backups de una configuración específica
+            $backups = Get-Backups -NombreConfig $NombreConfig
+            
+            if ($Mantener -eq -1) {
+                # Usar configuración por defecto de la frecuencia
+                $rutaConfig = Join-Path $global:BackupPath "${NombreConfig}_config.json"
+                if (Test-Path $rutaConfig) {
+                    $config = Get-Content $rutaConfig -Raw | ConvertFrom-Json
+                    $Mantener = $global:EsquemaBackup[$config.Frecuencia].MaxBackups
+                } else {
+                    $Mantener = 7  # Valor por defecto
+                }
+            }
+            
+            if ($backups.Count -gt $Mantener) {
+                $backupsAEliminar = $backups | Select-Object -Skip $Mantener
+                
+                foreach ($backup in $backupsAEliminar) {
+                    try {
+                        $tamano = (Get-Item $backup.Ruta).Length
+                        Remove-Item $backup.Ruta -Force -ErrorAction Stop
+                        
+                        $totalEliminados++
+                        $espacioLiberado += $tamano
+                        
+                        Write-Log -Level "DEBUG" -Message "Backup eliminado: $($backup.Archivo)"
+                    } catch {
+                        Write-Log -Level "WARNING" -Message "Error eliminando backup $($backup.Archivo): $_"
+                    }
+                }
+            }
+        } else {
+            # Limpiar backups de todas las configuraciones
+            $configuraciones = Get-ChildItem $global:BackupPath -Filter "*_config.json"
+            
+            foreach ($configFile in $configuraciones) {
+                $nombreConfig = $configFile.Name -replace '_config\.json$', ''
+                
+                try {
+                    $config = Get-Content $configFile.FullName -Raw | ConvertFrom-Json
+                    $mantenerConfig = $global:EsquemaBackup[$config.Frecuencia].MaxBackups
+                    
+                    $backups = Get-Backups -NombreConfig $nombreConfig
+                    
+                    if ($backups.Count -gt $mantenerConfig) {
+                        $backupsAEliminar = $backups | Select-Object -Skip $mantenerConfig
+                        
+                        foreach ($backup in $backupsAEliminar) {
+                            try {
+                                $tamano = (Get-Item $backup.Ruta).Length
+                                Remove-Item $backup.Ruta -Force -ErrorAction Stop
+                                
+                                $totalEliminados++
+                                $espacioLiberado += $tamano
+                                
+                                Write-Log -Level "DEBUG" -Message "Backup eliminado: $($backup.Archivo)"
+                            } catch {
+                                Write-Log -Level "WARNING" -Message "Error eliminando backup $($backup.Archivo): $_"
+                            }
+                        }
+                    }
+                } catch {
+                    Write-Log -Level "WARNING" -Message "Error procesando configuración $($configFile.Name): $_"
+                }
+            }
+        }
+        
+        $espacioMB = [math]::Round($espacioLiberado / 1MB, 2)
+        Write-Log -Level "INFO" -Message "Backups limpiados: $totalEliminados archivos eliminados ($espacioMB MB liberados)"
+        
+        return @{
+            Eliminados = $totalEliminados
+            EspacioLiberadoMB = $espacioMB
+        }
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error limpiando backups antiguos: $_"
+        return @{
+            Eliminados = 0
+            EspacioLiberadoMB = 0
+        }
+    }
+}
+
+function Start-BackupAutomatico {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [int]$IntervaloVerificacion = 3600  # 1 hora en segundos
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Iniciando servicio de backup automático (Verificación cada ${IntervaloVerificacion}s)"
+        
+        # Verificar si el backup automático está habilitado
+        $backupAutomatico = Get-Configuracion -Seccion "Backup" -Clave "HabilitarBackupAutomatico"
+        
+        if (-not $backupAutomatico) {
+            Write-Log -Level "INFO" -Message "Backup automático deshabilitado en configuración"
+            return $false
+        }
+        
+        # Bucle principal de servicio
+        while ($true) {
+            try {
+                # Obtener todas las configuraciones de backup
+                $configuraciones = Get-ChildItem $global:BackupPath -Filter "*_config.json" -ErrorAction SilentlyContinue
+                
+                foreach ($configFile in $configuraciones) {
+                    $nombreConfig = $configFile.Name -replace '_config\.json$', ''
+                    
+                    try {
+                        $config = Get-Content $configFile.FullName -Raw | ConvertFrom-Json
+                        
+                        # Verificar si el backup está activo
+                        if ($config.Estado -eq "Activo") {
+                            Write-Log -Level "DEBUG" -Message "Verificando backup: $nombreConfig"
+                            
+                            # Intentar hacer backup (sin forzar)
+                            $resultado = Start-Backup -NombreConfig $nombreConfig
+                            
+                            if ($resultado) {
+                                Write-Log -Level "DEBUG" -Message "Backup automático exitoso: $nombreConfig"
+                            }
+                        }
+                    } catch {
+                        Write-Log -Level "WARNING" -Message "Error en backup automático de $nombreConfig: $_"
+                    }
+                }
+                
+                # Limpiar backups antiguos
+                Remove-OldBackups
+                
+            } catch {
+                Write-Log -Level "ERROR" -Message "Error en ciclo de backup automático: $_"
+            }
+            
+            # Esperar antes de la siguiente verificación
+            Write-Log -Level "DEBUG" -Message "Esperando $IntervaloVerificacion segundos para próxima verificación..."
+            Start-Sleep -Seconds $IntervaloVerificacion
+        }
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error iniciando servicio de backup automático: $_"
+        return $false
+    }
+}
+
+# ========================
+# REPORTES DE BACKUP
+# ========================
+function Get-ReporteBackup {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$NombreConfig,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$Dias = 30
+    )
+    
+    try {
+        Write-Log -Level "INFO" -Message "Generando reporte de backup: Config=$NombreConfig, Dias=$Dias"
+        
+        $reporte = @{
+            FechaGeneracion = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            Periodo = "$Dias días"
+            Configuraciones = @()
+            Estadisticas = @{
+                TotalBackups = 0
+                TotalEspacioMB = 0
+                PromedioTamanoMB = 0
+                BackupsExitosos = 0
+                BackupsFallidos = 0
+            }
+        }
+        
+        # Obtener backups
+        $backups = Get-Backups -NombreConfig $NombreConfig
+        $backupsRecientes = $backups | Where-Object { $_.Fecha -gt (Get-Date).AddDays(-$Dias) }
+        
+        # Calcular estadísticas
+        $reporte.Estadisticas.TotalBackups = $backupsRecientes.Count
+        
+        $espacioTotal = 0
+        foreach ($backup in $backupsRecientes) {
+            $espacioTotal += $backup.Tamano
+        }
+        
+        $reporte.Estadisticas.TotalEspacioMB = [math]::Round($espacioTotal / 1MB, 2)
+        
+        if ($backupsRecientes.Count -gt 0) {
+            $reporte.Estadisticas.PromedioTamanoMB = [math]::Round(($espacioTotal / $backupsRecientes.Count) / 1MB, 2)
+        }
+        
+        # Agrupar por configuración
+        $backupsPorConfig = $backupsRecientes | Group-Object NombreConfig
+        
+        foreach ($grupo in $backupsPorConfig) {
+            $configInfo = @{
+                Nombre = $grupo.Name
+                TotalBackups = $grupo.Count
+                UltimoBackup = ($grupo.Group | Sort-Object Fecha -Descending | Select-Object -First 1).Fecha
+                EspacioTotalMB = [math]::Round(($grupo.Group | Measure-Object -Property Tamano -Sum).Sum / 1MB, 2)
+            }
+            
+            $reporte.Configuraciones += $configInfo
+        }
+        
+        # Guardar reporte
+        $fechaReporte = Get-Date -Format "yyyyMMdd_HHmmss"
+        $nombreReporte = if ($NombreConfig) { "reporte_backup_${NombreConfig}_${fechaReporte}.json" } else { "reporte_backup_${fechaReporte}.json" }
+        $rutaReporte = Join-Path $global:LogPath $nombreReporte
+        
+        $reporte | ConvertTo-Json -Depth 3 | Out-File $rutaReporte -Encoding UTF8
+        
+        Write-Log -Level "INFO" -Message "Reporte de backup generado: $rutaReporte"
+        return $reporte
+        
+    } catch {
+        Write-Log -Level "ERROR" -Message "Error generando reporte de backup: $_"
+        return $null
+    }
+}
+
+#endregion
+
+<#====================================================================================================================
+                                  SECURENAS v3.2 - Interfaz de Usuario
+====================================================================================================================#>
+#region Interfaz de Usuario
+
+# ========================
+# FUNCIONES DE INTERFAZ
+# ========================
+function Show-Header {
+    [CmdletBinding()]
+    param()
+    
+    Clear-Host
+    Write-Host "╔══════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║                    SECURE NAS v$global:SecureNASVersion                     ║" -ForegroundColor Cyan
+    Write-Host "║                 Sistema de Seguridad para NAS SMB                   ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Show-MenuPrincipal {
+    [CmdletBinding()]
+    param()
+    
+    Show-Header
+    
+    Write-Host "MENÚ PRINCIPAL" -ForegroundColor Yellow
+    Write-Host "═══════════════" -ForegroundColor Yellow
+    Write-Host ""
+    
+    Write-Host "1.  Configuración del Sistema" -ForegroundColor Green
+    Write-Host "2.  Gestión de Recursos Compartidos SMB" -ForegroundColor Green
+    Write-Host "3.  Herramientas de Seguridad" -ForegroundColor Green
+    Write-Host "4.  Sistema de Backup" -ForegroundColor Green
+    Write-Host "5.  Monitorización y Reportes" -ForegroundColor Green
+    Write-Host "6.  Utilidades" -ForegroundColor Green
+    Write-Host "0.  Salir" -ForegroundColor Red
+    Write-Host ""
+    
+    $opcion = Read-Host "Seleccione una opción"
+    
+    return $opcion
+}
+
+function Show-MenuConfiguracion {
+    [CmdletBinding()]
+    param()
+    
+    do {
+        Show-Header
+        
+        Write-Host "CONFIGURACIÓN DEL SISTEMA" -ForegroundColor Yellow
+        Write-Host "══════════════════════════" -ForegroundColor Yellow
+        Write-Host ""
+        
+        Write-Host "1.  Ver configuración actual" -ForegroundColor Green
+        Write-Host "2.  Cambiar servidor NAS" -ForegroundColor Green
+        Write-Host "3.  Configurar nivel de log" -ForegroundColor Green
+        Write-Host "4.  Restablecer configuración a valores por defecto" -ForegroundColor Green
+        Write-Host "5.  Exportar configuración" -ForegroundColor Green
+        Write-Host "6.  Importar configuración" -ForegroundColor Green
+        Write-Host "0.  Volver al menú principal" -ForegroundColor Red
+        Write-Host ""
+        
+        $opcion = Read-Host "Seleccione una opción"
+        
+        switch ($opcion) {
+            "1" { 
+                $config = Get-Configuracion
+                if ($config) {
+                    $config | ConvertTo-Json -Depth 3 | Out-Host
+                }
+                Pause
+            }
+            "2" { 
+                $servidorActual = Get-Configuracion -Seccion "Red" -Clave "ServidorNAS"
+                Write-Host "Servidor NAS actual: $servidorActual" -ForegroundColor Cyan
+                $nuevoServidor = Read-Host "Nuevo servidor NAS (IP o nombre)"
+                if (-not [string]::IsNullOrEmpty($nuevoServidor)) {
+                    $resultado = Set-Configuracion -Seccion "Red" -Clave "ServidorNAS" -Valor $nuevoServidor
+                    if ($resultado) {
+                        Write-Host "Servidor NAS actualizado exitosamente" -ForegroundColor $global:ColorExito
+                    }
+                }
+                Pause
+            }
+            "3" { 
+                $nivelActual = $global:LogLevels.GetEnumerator() | Where-Object { $_.Value -eq $global:CurrentLogLevel } | Select-Object -First 1
+                Write-Host "Nivel de log actual: $($nivelActual.Key)" -ForegroundColor Cyan
+                Write-Host "Niveles disponibles: DEBUG, INFO, WARNING, ERROR" -ForegroundColor Cyan
+                $nuevoNivel = Read-Host "Nuevo nivel de log"
+                if ($nuevoNivel -in @("DEBUG", "INFO", "WARNING", "ERROR")) {
+                    Set-LogLevel -Level $nuevoNivel
+                    Write-Host "Nivel de log actualizado" -ForegroundColor $global:ColorExito
+                } else {
+                    Write-Host "Nivel inválido" -ForegroundColor $global:ColorError
+                }
+                Pause
+            }
+            "4" { 
+                Write-Host "¿Está seguro de restablecer la configuración a valores por defecto?" -ForegroundColor $global:ColorAdvertencia
+                $confirmacion = Read-Host "Esta acción no se puede deshacer. Escriba 'SI' para confirmar"
+                if ($confirmacion -eq "SI") {
+                    Reset-Configuracion -Forzar
+                }
+                Pause
+            }
+            "5" { 
+                $ruta = Read-Host "Ruta donde guardar la configuración (ej: C:\backup\config.json)"
+                if (-not [string]::IsNullOrEmpty($ruta)) {
+                    $resultado = Export-Configuracion -RutaDestino $ruta
+                    if ($resultado) {
+                        Write-Host "Configuración exportada exitosamente" -ForegroundColor $global:ColorExito
+                    }
+                }
+                Pause
+            }
+            "6" { 
+                $ruta = Read-Host "Ruta del archivo de configuración a importar"
+                if (-not [string]::IsNullOrEmpty($ruta)) {
+                    if (Test-Path $ruta) {
+                        $sobrescribir = Read-Host "¿Sobrescribir configuración actual? (SI/NO)"
+                        $resultado = Import-Configuracion -RutaOrigen $ruta -Sobrescribir:($sobrescribir -eq "SI")
+                        if ($resultado) {
+                            Write-Host "Configuración importada exitosamente" -ForegroundColor $global:ColorExito
+                        }
+                    } else {
+                        Write-Host "El archivo no existe: $ruta" -ForegroundColor $global:ColorError
+                    }
+                }
+                Pause
+            }
+        }
+    } while ($opcion -ne "0")
+}
+
+function Show-MenuSMB {
+    [CmdletBinding()]
+    param()
+    
+    do {
+        Show-Header
+        
+        Write-Host "GESTIÓN DE RECURSOS COMPARTIDOS SMB" -ForegroundColor Yellow
+        Write-Host "════════════════════════════════════" -ForegroundColor Yellow
+        Write-Host ""
+        
+        Write-Host "1.  Ver recursos compartidos" -ForegroundColor Green
+        Write-Host "2.  Crear nuevo recurso compartido" -ForegroundColor Green
+        Write-Host "3.  Eliminar recurso compartido" -ForegroundColor Green
+        Write-Host "4.  Configurar permisos" -ForegroundColor Green
+        Write-Host "5.  Probar conexión con NAS" -ForegroundColor Green
+        Write-Host "6.  Ver estadísticas SMB" -ForegroundColor Green
+        Write-Host "0.  Volver al menú principal" -ForegroundColor Red
+        Write-Host ""
+        
+        $opcion = Read-Host "Seleccione una opción"
+        
+        switch ($opcion) {
+            "1" { 
+                $compartidos = Get-CompartidosSMB
+                if ($compartidos.Count -gt 0) {
+                    $compartidos | Format-Table -AutoSize
+                } else {
+                    Write-Host "No se encontraron recursos compartidos" -ForegroundColor $global:ColorAdvertencia
+                }
+                Pause
+            }
+            "2" { 
+                $nombre = Read-Host "Nombre del recurso compartido"
+                $ruta = Read-Host "Ruta física del directorio"
+                $descripcion = Read-Host "Descripción (opcional)"
+                $permisos = Read-Host "Permisos (Lectura/Escritura/Completo) [Lectura]"
+                if ([string]::IsNullOrEmpty($permisos)) { $permisos = "Lectura" }
+                
+                $resultado = New-CompartidoSMB -Nombre $nombre -Ruta $ruta -Descripcion $descripcion -Permisos $permisos
+                if ($resultado) {
+                    Write-Host "Recurso compartido creado exitosamente" -ForegroundColor $global:ColorExito
+                }
+                Pause
+            }
+            "3" { 
+                $nombre = Read-Host "Nombre del recurso compartido a eliminar"
+                $forzar = Read-Host "¿Eliminar sin confirmación? (SI/NO)"
+                $resultado = Remove-CompartidoSMB -Nombre $nombre -Forzar:($forzar -eq "SI")
+                if ($resultado) {
+                    Write-Host "Recurso compartido eliminado" -ForegroundColor $global:ColorExito
+                }
+                Pause
+            }
+            "4" { 
+                $nombre = Read-Host "Nombre del recurso compartido"
+                $usuario = Read-Host "Usuario o grupo"
+                $permiso = Read-Host "Permiso (Lectura/Escritura/Completo/Denegar)"
+                $resultado = Set-PermisosSMB -NombreCompartido $nombre -Usuario $usuario -Permiso $permiso
+                if ($resultado) {
+                    Write-Host "Permisos configurados exitosamente" -ForegroundColor $global:ColorExito
+                }
+                Pause
+            }
+            "5" { 
+                $servidor = Read-Host "Servidor NAS (dejar vacío para usar configurado)"
+                if ([string]::IsNullOrEmpty($servidor)) {
+                    $resultado = Test-ConexionNAS
+                } else {
+                    $resultado = Test-ConexionNAS -ServidorNAS $servidor
+                }
+                
+                if ($resultado) {
+                    Write-Host "✓ Conexión exitosa" -ForegroundColor $global:ColorExito
+                } else {
+                    Write-Host "✗ Error de conexión" -ForegroundColor $global:ColorError
+                }
+                Pause
+            }
+            "6" { 
+                $estadisticas = Get-EstadisticasSMB
+                if ($estadisticas.Count -gt 0) {
+                    $estadisticas.GetEnumerator() | ForEach-Object {
+                        Write-Host "$($_.Key): $($_.Value)" -ForegroundColor Cyan
+                    }
+                } else {
+                    Write-Host "No se pudieron obtener estadísticas" -ForegroundColor $global:ColorError
+                }
+                Pause
+            }
+        }
+    } while ($opcion -ne "0")
+}
+
+function Show-MenuSeguridad {
+    [CmdletBinding()]
+    param()
+    
+    do {
+        Show-Header
+        
+        Write-Host "HERRAMIENTAS DE SEGURIDAD" -ForegroundColor Yellow
+        Write-Host "═════════════════════════" -ForegroundColor Yellow
+        Write-Host ""
+        
+        Write-Host "1.  Configurar firewall para NAS" -ForegroundColor Green
+        Write-Host "2.  Deshabilitar reglas de firewall" -ForegroundColor Green
+        Write-Host "3.  Ejecutar auditoría de seguridad" -ForegroundColor Green
+        Write-Host "4.  Ver reportes de seguridad" -ForegroundColor Green
+        Write-Host "5.  Monitorear intrusos SMB" -ForegroundColor Green
+        Write-Host "0.  Volver al menú principal" -ForegroundColor Red
+        Write-Host ""
+        
+        $opcion = Read-Host "Seleccione una opción"
+        
+        switch ($opcion) {
+            "1" { 
+                $servidor = Read-Host "Servidor NAS (dejar vacío para usar configurado)"
+                if ([string]::IsNullOrEmpty($servidor)) {
+                    $resultado = Enable-FirewallNAS
+                } else {
+                    $resultado = Enable-FirewallNAS -ServidorNAS $servidor
+                }
+                
+                if ($resultado) {
+                    Write-Host "Firewall configurado exitosamente" -ForegroundColor $global:ColorExito
+                }
+                Pause
+            }
+            "2" { 
+                Write-Host "Opciones:" -ForegroundColor Cyan
+                Write-Host "1. Deshabilitar solo reglas básicas" -ForegroundColor Green
+                Write-Host "2. Deshabilitar todas las reglas de SecureNAS" -ForegroundColor Green
+                $tipo = Read-Host "Seleccione opción (1/2)"
+                
+                if ($tipo -eq "2") {
+                    $resultado = Disable-FirewallNAS -Completo
+                } else {
+                    $resultado = Disable-FirewallNAS
+                }
+                
+                if ($resultado) {
+                    Write-Host "Reglas de firewall deshabilitadas" -ForegroundColor $global:ColorExito
+                }
+                Pause
+            }
+            "3" { 
+                Write-Host "Niveles de auditoría:" -ForegroundColor Cyan
+                Write-Host "1. Bajo (verificaciones básicas)" -ForegroundColor Green
+                Write-Host "2. Medio (verificaciones extendidas)" -ForegroundColor Green
+                Write-Host "3. Alto (verificaciones completas)" -ForegroundColor Green
+                $nivelInput = Read-Host "Seleccione nivel (1/2/3) [3]"
+                
+                $nivel = switch ($nivelInput) {
+                    "1" { "Bajo" }
+                    "2" { "Medio" }
+                    default { "Alto" }
+                }
+                
+                Write-Host "Ejecutando auditoría de seguridad (Nivel: $nivel)..." -ForegroundColor Cyan
+                $resultado = Start-AuditoriaSeguridad -Nivel $nivel
+                
+                if ($resultado) {
+                    Write-Host "Auditoría completada exitosamente" -ForegroundColor $global:ColorExito
+                    Write-Host "Resultados guardados en logs" -ForegroundColor Cyan
+                }
+                Pause
+            }
+            "4" { 
+                $dias = Read-Host "Número de días a incluir en el reporte [7]"
+                if ([string]::IsNullOrEmpty($dias)) { $dias = 7 }
+                
+                $reporte = Get-ReporteSeguridad -Dias $dias
+                if ($reporte) {
+                    Write-Host "=== REPORTE DE SEGURIDAD ===" -ForegroundColor Yellow
+                    Write-Host "Período: $($reporte.Periodo)" -ForegroundColor Cyan
+                    Write-Host "Total auditorías: $($reporte.TotalAuditorias)" -ForegroundColor Cyan
+                    Write-Host ""
+                    Write-Host "Estadísticas:" -ForegroundColor Yellow
+                    $reporte.Resumen.GetEnumerator() | ForEach-Object {
+                        Write-Host "  $($_.Key): $($_.Value)" -ForegroundColor Green
+                    }
+                    
+                    if ($reporte.ProblemasComunes.Count -gt 0) {
+                        Write-Host ""
+                        Write-Host "Problemas más comunes:" -ForegroundColor Yellow
+                        foreach ($problema in $reporte.ProblemasComunes) {
+                            Write-Host "  $($problema.Problema): $($problema.Frecuencia) veces ($($problema.Porcentaje)%)" -ForegroundColor $global:ColorAdvertencia
+                        }
+                    }
+                } else {
+                    Write-Host "No se pudo generar el reporte" -ForegroundColor $global:ColorError
+                }
+                Pause
+            }
+            "5" { 
+                Write-Host "Monitoreo de intrusos SMB" -ForegroundColor Cyan
+                Write-Host "Este proceso se ejecutará en segundo plano." -ForegroundColor Cyan
+                Write-Host ""
+                $intervalo = Read-Host "Intervalo de verificación (segundos) [300]"
+                if ([string]::IsNullOrEmpty($intervalo)) { $intervalo = 300 }
+                
+                $duracion = Read-Host "Duración total (segundos) [3600]"
+                if ([string]::IsNullOrEmpty($duracion)) { $duracion = 3600 }
+                
+                Write-Host "Iniciando monitoreo..." -ForegroundColor Cyan
+                $job = Start-Job -ScriptBlock {
+                    param($Intervalo, $Duracion)
+                    . $using:global:LogPath\..\SecureNAS.ps1
+                    Monitor-IntrusosSMB -Intervalo $Intervalo -Duracion $Duracion
+                } -ArgumentList $intervalo, $duracion
+                
+                Write-Host "Monitoreo iniciado en segundo plano (Job ID: $($job.Id))" -ForegroundColor $global:ColorExito
+                Write-Host "Use 'Receive-Job -Id $($job.Id)' para ver resultados" -ForegroundColor Cyan
+                Pause
+            }
+        }
+    } while ($opcion -ne "0")
+}
+
+function Show-MenuBackup {
+    [CmdletBinding()]
+    param()
+    
+    do {
+        Show-Header
+        
+        Write-Host "SISTEMA DE BACKUP" -ForegroundColor Yellow
+        Write-Host "══════════════════" -ForegroundColor Yellow
+        Write-Host ""
+        
+        Write-Host "1.  Crear configuración de backup" -ForegroundColor Green
+        Write-Host "2.  Ejecutar backup manual" -ForegroundColor Green
+        Write-Host "3.  Ver backups existentes" -ForegroundColor Green
+        Write-Host "4.  Restaurar backup" -ForegroundColor Green
+        Write-Host "5.  Limpiar backups antiguos" -ForegroundColor Green
+        Write-Host "6.  Iniciar servicio de backup automático" -ForegroundColor Green
+        Write-Host "7.  Generar reporte de backups" -ForegroundColor Green
+        Write-Host "0.  Volver al menú principal" -ForegroundColor Red
+        Write-Host ""
+        
+        $opcion = Read-Host "Seleccione una opción"
+        
+        switch ($opcion) {
+            "1" { 
+                $nombre = Read-Host "Nombre de la configuración"
+                $rutaOrigen = Read-Host "Ruta de origen a respaldar"
+                $rutaDestino = Read-Host "Ruta de destino (dejar vacío para predeterminada)"
+                $frecuencia = Read-Host "Frecuencia (Diario/Semanal/Mensual) [Diario]"
+                if ([string]::IsNullOrEmpty($frecuencia)) { $frecuencia = "Diario" }
+                
+                $excluir = Read-Host "Patrones a excluir (separados por coma) [*.tmp,*.log,Thumbs.db]"
+                if ([string]::IsNullOrEmpty($excluir)) { 
+                    $excluirPatrones = @("*.tmp", "*.log", "Thumbs.db") 
+                } else {
+                    $excluirPatrones = $excluir -split ',' | ForEach-Object { $_.Trim() }
+                }
+                
+                $config = New-BackupConfiguracion -Nombre $nombre -RutaOrigen $rutaOrigen -RutaDestino $rutaDestino -Frecuencia $frecuencia -ExcluirPatrones $excluirPatrones
+                if ($config) {
+                    Write-Host "Configuración de backup creada exitosamente" -ForegroundColor $global:ColorExito
+                }
+                Pause
+            }
+            "2" { 
+                $nombre = Read-Host "Nombre de la configuración de backup"
+                $forzar = Read-Host "¿Forzar backup? (SI/NO)"
+                $resultado = Start-Backup -NombreConfig $nombre -Forzar:($forzar -eq "SI")
+                if ($resultado) {
+                    Write-Host "Backup ejecutado exitosamente" -ForegroundColor $global:ColorExito
+                } else {
+                    Write-Host "Backup no fue necesario o falló" -ForegroundColor $global:ColorAdvertencia
+                }
+                Pause
+            }
+            "3" { 
+                $nombre = Read-Host "Nombre de configuración (dejar vacío para ver todos)"
+                $ultimos = Read-Host "Número de backups a mostrar [10]"
+                if ([string]::IsNullOrEmpty($ultimos)) { $ultimos = 10 }
+                
+                if ([string]::IsNullOrEmpty($nombre)) {
+                    $backups = Get-Backups -Ultimos $ultimos
+                } else {
+                    $backups = Get-Backups -NombreConfig $nombre -Ultimos $ultimos
+                }
+                
+                if ($backups.Count -gt 0) {
+                    $backups | Format-Table -AutoSize
+                    $totalEspacio = ($backups | Measure-Object -Property Tamano -Sum).Sum
+                    Write-Host "Espacio total: $([math]::Round($totalEspacio / 1MB, 2)) MB" -ForegroundColor Cyan
+                } else {
+                    Write-Host "No se encontraron backups" -ForegroundColor $global:ColorAdvertencia
+                }
+                Pause
+            }
+            "4" { 
+                $rutaBackup = Read-Host "Ruta completa del archivo de backup (.zip)"
+                $rutaDestino = Read-Host "Ruta de destino (dejar vacío para usar original)"
+                $sobrescribir = Read-Host "¿Sobrescribir archivos existentes? (SI/NO)"
+                
+                $resultado = Restore-Backup -RutaBackup $rutaBackup -RutaDestino $rutaDestino -Sobrescribir:($sobrescribir -eq "SI")
+                if ($resultado) {
+                    Write-Host "Backup restaurado exitosamente" -ForegroundColor $global:ColorExito
+                }
+                Pause
+            }
+            "5" { 
+                $nombre = Read-Host "Nombre de configuración (dejar vacío para limpiar todos)"
+                $mantener = Read-Host "Número de backups a mantener (dejar vacío para usar frecuencia)"
+                
+                if ([string]::IsNullOrEmpty($mantener)) {
+                    $mantener = -1
+                }
+                
+                $resultado = Remove-OldBackups -NombreConfig $nombre -Mantener $mantener
+                Write-Host "Backups eliminados: $($resultado.Eliminados)" -ForegroundColor Cyan
+                Write-Host "Espacio liberado: $($resultado.EspacioLiberadoMB) MB" -ForegroundColor $global:ColorExito
+                Pause
+            }
+            "6" { 
+                Write-Host "INICIANDO SERVICIO DE BACKUP AUTOMÁTICO" -ForegroundColor Yellow
+                Write-Host "Este proceso se ejecutará en segundo plano." -ForegroundColor Cyan
+                Write-Host "Use 'Get-Job' para ver trabajos activos." -ForegroundColor Cyan
+                Write-Host "Use 'Stop-Job -Id <ID>' para detener el servicio." -ForegroundColor Cyan
+                Write-Host ""
+                $intervalo = Read-Host "Intervalo de verificación (segundos) [3600]"
+                if ([string]::IsNullOrEmpty($intervalo)) { $intervalo = 3600 }
+                
+                $job = Start-Job -ScriptBlock {
+                    param($Intervalo)
+                    . $using:global:LogPath\..\SecureNAS.ps1
+                    Start-BackupAutomatico -IntervaloVerificacion $Intervalo
+                } -ArgumentList $intervalo
+                
+                Write-Host "Servicio iniciado en segundo plano (Job ID: $($job.Id))" -ForegroundColor $global:ColorExito
+                Pause
+            }
+            "7" { 
+                $nombre = Read-Host "Nombre de configuración (dejar vacío para todas)"
+                $dias = Read-Host "Número de días a incluir [30]"
+                if ([string]::IsNullOrEmpty($dias)) { $dias = 30 }
+                
+                $reporte = Get-ReporteBackup -NombreConfig $nombre -Dias $dias
+                if ($reporte) {
+                    Write-Host "=== REPORTE DE BACKUP ===" -ForegroundColor Yellow
+                    Write-Host "Fecha: $($reporte.FechaGeneracion)" -ForegroundColor Cyan
+                    Write-Host "Período: $($reporte.Periodo)" -ForegroundColor Cyan
+                    Write-Host ""
+                    Write-Host "Estadísticas:" -ForegroundColor Yellow
+                    $reporte.Estadisticas.GetEnumerator() | ForEach-Object {
+                        Write-Host "  $($_.Key): $($_.Value)" -ForegroundColor Green
+                    }
+                    
+                    if ($reporte.Configuraciones.Count -gt 0) {
+                        Write-Host ""
+                        Write-Host "Configuraciones:" -ForegroundColor Yellow
+                        foreach ($config in $reporte.Configuraciones) {
+                            Write-Host "  $($config.Nombre): $($config.TotalBackups) backups ($($config.EspacioTotalMB) MB)" -ForegroundColor Cyan
+                        }
+                    }
+                } else {
+                    Write-Host "No se pudo generar el reporte" -ForegroundColor $global:ColorError
+                }
+                Pause
+            }
+        }
+    } while ($opcion -ne "0")
+}
+
+function Show-MenuUtilidades {
+    [CmdletBinding()]
+    param()
+    
+    do {
+        Show-Header
+        
+        Write-Host "UTILIDADES" -ForegroundColor Yellow
+        Write-Host "═══════════" -ForegroundColor Yellow
+        Write-Host ""
+        
+        Write-Host "1.  Ver logs del sistema" -ForegroundColor Green
+        Write-Host "2.  Limpiar logs antiguos" -ForegroundColor Green
+        Write-Host "3.  Probar todas las conexiones" -ForegroundColor Green
+        Write-Host "4.  Verificar estado de servicios" -ForegroundColor Green
+        Write-Host "5.  Ver información del sistema" -ForegroundColor Green
+        Write-Host "0.  Volver al menú principal" -ForegroundColor Red
+        Write-Host ""
+        
+        $opcion = Read-Host "Seleccione una opción"
+        
+        switch ($opcion) {
+            "1" { 
+                $archivo = Read-Host "Nombre del archivo de log [SecureNAS.log]"
+                if ([string]::IsNullOrEmpty($archivo)) { $archivo = "SecureNAS.log" }
+                
+                $lineas = Read-Host "Número de líneas a mostrar [100]"
+                if ([string]::IsNullOrEmpty($lineas)) { $lineas = 100 }
+                
+                $logs = Get-LogFile -LogFile $archivo -LastLines $lineas
+                if ($logs) {
+                    $logs | Out-Host
+                } else {
+                    Write-Host "No se encontraron logs" -ForegroundColor $global:ColorAdvertencia
+                }
+                Pause
+            }
+            "2" { 
+                $dias = Read-Host "Mantener logs de los últimos N días [30]"
+                if ([string]::IsNullOrEmpty($dias)) { $dias = 30 }
+                
+                $eliminados = Clear-Logs -DaysToKeep $dias
+                Write-Host "Logs limpiados: $eliminados archivos eliminados" -ForegroundColor $global:ColorExito
+                Pause
+            }
+            "3" { 
+                Write-Host "Probando conexiones..." -ForegroundColor Cyan
+                
+                # Probar conexión NAS
+                Write-Host "1. Probando conexión con NAS..." -NoNewline
+                $resultadoNAS = Test-ConexionNAS
+                if ($resultadoNAS) {
+                    Write-Host " ✓" -ForegroundColor $global:ColorExito
+                } else {
+                    Write-Host " ✗" -ForegroundColor $global:ColorError
+                }
+                
+                # Probar recursos compartidos
+                Write-Host "2. Obteniendo recursos compartidos..." -NoNewline
+                $compartidos = Get-CompartidosSMB
+                if ($compartidos -and $compartidos.Count -gt 0) {
+                    Write-Host " ✓ ($($compartidos.Count) encontrados)" -ForegroundColor $global:ColorExito
+                } else {
+                    Write-Host " ✗ (0 encontrados)" -ForegroundColor $global:ColorError
+                }
+                
+                # Probar firewall
+                Write-Host "3. Verificando reglas de firewall..." -NoNewline
+                $reglas = Get-NetFirewallRule -DisplayName "SecureNAS-*" -ErrorAction SilentlyContinue
+                if ($reglas) {
+                    $reglasActivas = $reglas | Where-Object { $_.Enabled -eq "True" }
+                    Write-Host " ✓ ($($reglasActivas.Count)/$($reglas.Count) activas)" -ForegroundColor $global:ColorExito
+                } else {
+                    Write-Host " ✗ (0 reglas)" -ForegroundColor $global:ColorError
+                }
+                
+                Pause
+            }
+            "4" { 
+                Write-Host "Estado de servicios relacionados:" -ForegroundColor Cyan
+                
+                $servicios = @(
+                    @{Nombre="Server"; Descripcion="Servicio SMB"},
+                    @{Nombre="WinDefend"; Descripcion="Windows Defender"},
+                    @{Nombre="EventLog"; Descripcion="Registro de eventos"}
+                )
+                
+                foreach ($servicio in $servicios) {
+                    $estado = Get-Service -Name $servicio.Nombre -ErrorAction SilentlyContinue
+                    if ($estado) {
+                        $icono = if ($estado.Status -eq "Running") { "✓" } else { "✗" }
+                        $color = if ($estado.Status -eq "Running") { $global:ColorExito } else { $global:ColorError }
+                        Write-Host "  $icono $($servicio.Descripcion): $($estado.Status)" -ForegroundColor $color
+                    } else {
+                        Write-Host "  ? $($servicio.Descripcion): No encontrado" -ForegroundColor $global:ColorAdvertencia
+                    }
+                }
+                Pause
+            }
+            "5" { 
+                Write-Host "=== INFORMACIÓN DEL SISTEMA ===" -ForegroundColor Yellow
+                
+                # Información del sistema
+                $os = Get-CimInstance Win32_OperatingSystem
+                $comp = Get-CimInstance Win32_ComputerSystem
+                
+                Write-Host "Sistema Operativo: $($os.Caption) ($($os.OSArchitecture))" -ForegroundColor Cyan
+                Write-Host "Versión: $($os.Version)" -ForegroundColor Cyan
+                Write-Host "Fabricante: $($comp.Manufacturer)" -ForegroundColor Cyan
+                Write-Host "Modelo: $($comp.Model)" -ForegroundColor Cyan
+                Write-Host "Memoria física: $([math]::Round($comp.TotalPhysicalMemory / 1GB, 2)) GB" -ForegroundColor Cyan
+                Write-Host ""
+                
+                # Información de SecureNAS
+                Write-Host "=== INFORMACIÓN DE SECURENAS ===" -ForegroundColor Yellow
+                Write-Host "Versión: $global:SecureNASVersion" -ForegroundColor Cyan
+                Write-Host "Directorio logs: $global:LogPath" -ForegroundColor Cyan
+                Write-Host "Directorio backups: $global:BackupPath" -ForegroundColor Cyan
+                
+                # Estadísticas
+                $logsCount = (Get-ChildItem $global:LogPath -Filter "*.log" -ErrorAction SilentlyContinue).Count
+                $backupsCount = (Get-ChildItem $global:BackupPath -Filter "*.zip" -Recurse -ErrorAction SilentlyContinue).Count
+                
+                Write-Host "Archivos de log: $logsCount" -ForegroundColor Cyan
+                Write-Host "Backups almacenados: $backupsCount" -ForegroundColor Cyan
+                
+                Pause
+            }
+        }
+    } while ($opcion -ne "0")
+}
+
+# ========================
+# FUNCIÓN PRINCIPAL
+# ========================
+function Start-SecureNAS {
+    [CmdletBinding()]
+    param()
+    
+    try {
+        # Inicializar sistema
+        Write-Host "Iniciando SecureNAS v$global:SecureNASVersion..." -ForegroundColor Cyan
+        
+        $inicializado = Initialize-SecureNAS
+        if (-not $inicializado) {
+            Write-Host "Error en inicialización. Verifique los logs." -ForegroundColor $global:ColorError
+            Read-Host "Presione Enter para salir"
+            return
+        }
+        
+        Write-Host "Sistema inicializado correctamente." -ForegroundColor $global:ColorExito
+        Start-Sleep -Seconds 1
+        
+        # Bucle principal del menú
+        do {
+            $opcion = Show-MenuPrincipal
+            
+            switch ($opcion) {
+                "1" { Show-MenuConfiguracion }
+                "2" { Show-MenuSMB }
+                "3" { Show-MenuSeguridad }
+                "4" { Show-MenuBackup }
+                "5" { Show-MenuUtilidades }  # Nota: El menú 5 original era "Monitorización", ahora es "Utilidades"
+                "0" { 
+                    Write-Host ""
+                    Write-Host "Gracias por usar SecureNAS. ¡Hasta pronto!" -ForegroundColor $global:ColorExito
+                    Write-Host ""
+                }
+                default {
+                    Write-Host "Opción inválida. Presione Enter para continuar." -ForegroundColor $global:ColorError
+                    Pause
+                }
+            }
+        } while ($opcion -ne "0")
+        
+    } catch {
+        Write-Host "Error crítico en SecureNAS: $_" -ForegroundColor $global:ColorError
+        Write-Host "Detalles: $($_.Exception.Message)" -ForegroundColor $global:ColorError
+        Read-Host "Presione Enter para salir"
+    }
+}
+
+# Función auxiliar para pausa
+function Pause {
+    Write-Host ""
+    Write-Host "Presione Enter para continuar..." -ForegroundColor Gray
+    $null = Read-Host
+}
+
+#endregion
+
+# ============================================
+# FIN DEL SCRIPT V3.2
+# ============================================
