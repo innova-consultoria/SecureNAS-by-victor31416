@@ -1,0 +1,2973 @@
+<#
+.SYNOPSIS
+    Script de Auditoría de Sistema Windows - Versión 3.2
+.DESCRIPTION
+    Realiza auditoría completa del sistema en 3 fases:
+    - Fase 1: Configuración básica
+    - Fase 2: Recolección detallada
+    - Fase 3: Exportación multiformato (CSV, JSON, HTML, Markdown)
+.NOTES
+    Versión: 3.2
+    Requisitos: PowerShell 5.1+, Ejecutar como Administrador
+    Encoding: UTF8 en todos los archivos
+#>
+
+#Requires -RunAsAdministrator
+
+#region PARÁMETROS CONFIGURABLES
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$OutputPath = "C:\Audits",
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$ExportHTML = $false,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$QuickAudit = $false,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$FullAudit = $true,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$SecurityCheck = $false,
+    
+    [Parameter(Mandatory = $false)]
+    [int]$NetworkTimeout = 30
+)
+
+#endregion
+
+#region VALIDACIÓN DE PARÁMETROS Y CREACIÓN DE ESTRUCTURA
+
+# Validar OutputPath
+if (-not $OutputPath) {
+    $OutputPath = "C:\Audits"
+    Write-Warning "OutputPath no especificado. Usando valor por defecto: $OutputPath"
+}
+
+# Crear nombre de carpeta con timestamp
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$computerName = $env:COMPUTERNAME
+$auditFolderName = "${computerName}_${timestamp}"
+$auditPath = Join-Path -Path $OutputPath -ChildPath $auditFolderName
+
+# Crear carpeta principal
+try {
+    if (-not (Test-Path -Path $auditPath)) {
+        New-Item -ItemType Directory -Path $auditPath -Force | Out-Null
+        Write-Host "[OK] Carpeta principal creada: $auditPath" -ForegroundColor Green
+    }
+} catch {
+    Write-Error "Error al crear carpeta principal: $_"
+    exit 1
+}
+
+# Crear subcarpetas Fase1, Fase2, Fase3
+$phaseFolders = @{
+    Fase1 = Join-Path -Path $auditPath -ChildPath "Fase1"
+    Fase2 = Join-Path -Path $auditPath -ChildPath "Fase2"
+    Fase3 = Join-Path -Path $auditPath -ChildPath "Fase3"
+}
+
+1..3 | ForEach-Object {
+    $faseKey = "Fase$_"
+    $fasePath = $phaseFolders[$faseKey]
+    
+    try {
+        if (-not (Test-Path -Path $fasePath)) {
+            New-Item -ItemType Directory -Path $fasePath -Force | Out-Null
+            Write-Host "[OK] Carpeta $faseKey creada: $fasePath" -ForegroundColor Green
+        }
+    } catch {
+        Write-Error "Error al crear carpeta ${faseKey}: $_"
+    }
+}
+
+#endregion
+
+#region INICIALIZACIÓN DE VARIABLES GLOBALES
+
+# Variables globales para datos de auditoría
+$global:AuditData = @{
+    SystemInfo = $null
+    Disks = @()
+    NetworkInfo = $null
+    UserProfiles = @()
+    Applications = @()
+}
+
+$global:CurrentPhase = 0
+$global:TotalPhases = 5
+$global:Fase3ExportHTML = $ExportHTML
+$global:StartTime = Get-Date
+$global:ErrorCount = 0
+$global:WarningCount = 0
+
+#endregion
+
+#region CONFIGURACIÓN DE LOGGING
+
+# Archivo de log principal
+$logFileName = "${auditFolderName}_audit.log"
+$global:LogFile = Join-Path -Path $auditPath -ChildPath $logFileName
+
+# Inicializar archivo de log
+try {
+    $logHeader = @"
+========================================
+AUDITORÍA DE SISTEMA WINDOWS - v3.2
+========================================
+Fecha inicio: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+Equipo: $computerName
+Usuario: $env:USERNAME
+Ruta de salida: $auditPath
+Exportar HTML: $ExportHTML
+Auditoría rápida: $QuickAudit
+Auditoría completa: $FullAudit
+Verificación seguridad: $SecurityCheck
+========================================
+
+"@
+    
+    $logHeader | Out-File -FilePath $global:LogFile -Encoding UTF8 -Force
+    Write-Host "[OK] Archivo de log inicializado: $global:LogFile" -ForegroundColor Green
+    
+} catch {
+    Write-Error "Error al inicializar archivo de log: $_"
+    exit 1
+}
+
+#endregion
+
+#region MOSTRAR ENCABEZADO INICIAL
+
+Clear-Host
+
+$headerText = @"
+
+===================================================
+  AUDITORÍA DE SISTEMA WINDOWS - VERSIÓN 3.2
+  EXPORTACIÓN MULTIFORMATO
+===================================================
+Equipo: $computerName
+Usuario: $env:USERNAME
+Fecha: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+---------------------------------------------------
+CONFIGURACIÓN ACTUAL:
+  • Ruta resultados: $auditPath
+  • Exportar HTML: $ExportHTML
+  • Auditoría rápida: $QuickAudit
+  • Auditoría completa: $FullAudit
+  • Verificación seguridad: $SecurityCheck
+  • Timeout red: $NetworkTimeout segundos
+---------------------------------------------------
+ESTRUCTURA DE CARPETAS:
+  • Fase 1: $(if ($phaseFolders.Fase1) { 'Creada' } else { 'Error' })
+  • Fase 2: $(if ($phaseFolders.Fase2) { 'Creada' } else { 'Error' })
+  • Fase 3: $(if ($phaseFolders.Fase3) { 'Creada' } else { 'Error' })
+===================================================
+
+"@
+
+Write-Host $headerText -ForegroundColor Cyan
+
+# Pausa breve para que el usuario pueda leer
+Start-Sleep -Seconds 2
+
+#endregion
+
+#region FUNCIONES DE SOPORTE
+
+<#
+.SYNOPSIS
+    Función de logging con niveles, timestamp y colores
+#>
+function Write-Log {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+        
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('INFO', 'WARNING', 'ERROR', 'SUCCESS', 'DEBUG')]
+        [string]$Level = 'INFO',
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$NoConsole
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "[$timestamp] [$Level] $Message"
+    
+    # Escribir a archivo de log
+    try {
+        if ($global:LogFile) {
+            $logMessage | Out-File -FilePath $global:LogFile -Append -Encoding UTF8
+        }
+    } catch {
+        Write-Warning "No se pudo escribir en el log: $_"
+    }
+    
+    # Escribir a consola con colores
+    if (-not $NoConsole) {
+        $color = switch ($Level) {
+            'INFO'    { 'White' }
+            'WARNING' { 'Yellow' }
+            'ERROR'   { 'Red' }
+            'SUCCESS' { 'Green' }
+            'DEBUG'   { 'Gray' }
+            default   { 'White' }
+        }
+        
+        Write-Host $logMessage -ForegroundColor $color
+    }
+    
+    # Actualizar contadores globales
+    if ($Level -eq 'ERROR') {
+        $global:ErrorCount++
+    } elseif ($Level -eq 'WARNING') {
+        $global:WarningCount++
+    }
+}
+
+<#
+.SYNOPSIS
+    Muestra progreso de operación - Compatible con formato Fase 1-2-3
+#>
+function Show-Progress {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [int]$PhaseNumber,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Etapa,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Mensaje,
+        
+        [Parameter(Mandatory = $false)]
+        [int]$PercentComplete = -1,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Activity = "Procesando auditoría"
+    )
+    
+    # Determinar el mensaje de estado
+    $statusMessage = if ($Mensaje) {
+        $Mensaje
+    } elseif ($Etapa) {
+        $Etapa
+    } elseif ($PhaseNumber -gt 0) {
+        "Ejecutando Fase $PhaseNumber"
+    } else {
+        "Procesando..."
+    }
+    
+    # Calcular porcentaje si se proporciona PhaseNumber
+    if ($PhaseNumber -gt 0 -and $PercentComplete -eq -1) {
+        $PercentComplete = [int](($PhaseNumber / $global:TotalPhases) * 100)
+    }
+    
+    # Mostrar barra de progreso
+    if ($PercentComplete -ge 0 -and $PercentComplete -le 100) {
+        Write-Progress -Activity $Activity -Status $statusMessage -PercentComplete $PercentComplete
+    } else {
+        Write-Progress -Activity $Activity -Status $statusMessage
+    }
+}
+
+<#
+.SYNOPSIS
+    Verifica módulos de PowerShell requeridos
+#>
+function Test-Modules {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string[]]$RequiredModules = @('CimCmdlets', 'NetTCPIP', 'Storage')
+    )
+    
+    Write-Log "Verificando módulos requeridos..." -Level INFO
+    
+    $allModulesAvailable = $true
+    
+    foreach ($moduleName in $RequiredModules) {
+        try {
+            $module = Get-Module -Name $moduleName -ListAvailable -ErrorAction SilentlyContinue
+            
+            if ($module) {
+                Write-Log "  [OK] Módulo '$moduleName' disponible" -Level SUCCESS
+            } else {
+                Write-Log "  [!] Módulo '$moduleName' NO disponible" -Level WARNING
+                $allModulesAvailable = $false
+            }
+        } catch {
+            Write-Log "  [ERROR] Error verificando módulo '${moduleName}': $_" -Level ERROR
+            $allModulesAvailable = $false
+        }
+    }
+    
+    return $allModulesAvailable
+}
+
+<#
+.SYNOPSIS
+    Verifica dependencias específicas para exportación en Fase 3
+#>
+function Test-ExportDependencies {
+    [CmdletBinding()]
+    param()
+    
+    Write-Log "Verificando dependencias de exportación (Fase 3)..." -Level INFO
+    
+    # Lista de comandos a verificar
+    $commandsToCheck = @('ConvertTo-Json', 'Export-Csv', 'ConvertTo-Html', 'Out-File')
+    
+    $dependencies = @{}
+    
+    # Verificar cada comando
+    foreach ($cmdName in $commandsToCheck) {
+        try {
+            $cmd = Get-Command -Name $cmdName -ErrorAction SilentlyContinue
+            if ($cmd) {
+                $dependencies[$cmdName] = $true
+                Write-Log "  [OK] Comando '$cmdName' disponible" -Level SUCCESS
+            } else {
+                $dependencies[$cmdName] = $false
+                Write-Log "  [!] Comando '$cmdName' NO disponible" -Level WARNING
+            }
+        } catch {
+            $dependencies[$cmdName] = $false
+            Write-Log "  [ERROR] Error verificando '${cmdName}': $_" -Level ERROR
+        }
+    }
+    
+    # Verificar que todos estén disponibles
+    $allAvailable = ($dependencies.Values -notcontains $false)
+    
+    if ($allAvailable) {
+        Write-Log "Todas las dependencias de exportación están disponibles" -Level SUCCESS
+    } else {
+        Write-Log "ADVERTENCIA: Algunas dependencias de exportación no están disponibles" -Level WARNING
+    }
+    
+    return $allAvailable
+}
+
+<#
+.SYNOPSIS
+    Valida estructura de datos antes de exportación
+#>
+function Test-ExportData {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Data
+    )
+    
+    Write-Log "Validando estructura de datos para exportación..." -Level INFO
+    
+    $isValid = $true
+    $validationErrors = @()
+    
+    # Validar SystemInfo
+    if ($Data.ContainsKey('SystemInfo') -and $Data.SystemInfo) {
+        if (-not $Data.SystemInfo.ComputerName) {
+            $validationErrors += "SystemInfo.ComputerName está vacío"
+            $isValid = $false
+        }
+    } else {
+        $validationErrors += "SystemInfo no existe o está vacío"
+        $isValid = $false
+    }
+    
+    # Validar Disks (debe ser array)
+    if ($Data.ContainsKey('Disks')) {
+        if ($Data.Disks -isnot [array]) {
+            $validationErrors += "Disks no es un array"
+            $isValid = $false
+        }
+    } else {
+        $validationErrors += "Disks no existe"
+        $isValid = $false
+    }
+    
+    # Validar NetworkInfo
+    if (-not $Data.ContainsKey('NetworkInfo')) {
+        $validationErrors += "NetworkInfo no existe"
+        $isValid = $false
+    }
+    
+    # Validar metadatos requeridos
+    if (-not $Data.ContainsKey('ComputerName')) {
+        $validationErrors += "ComputerName no existe en datos"
+        $isValid = $false
+    }
+    
+    if (-not $Data.ContainsKey('Timestamp')) {
+        $validationErrors += "Timestamp no existe en datos"
+        $isValid = $false
+    }
+    
+    # Reportar resultados
+    if ($isValid) {
+        Write-Log "Validación de datos: OK" -Level SUCCESS
+    } else {
+        Write-Log "Validación de datos: ERRORES ENCONTRADOS" -Level ERROR
+        foreach ($error in $validationErrors) {
+            Write-Log "  - $error" -Level ERROR
+        }
+    }
+    
+    return $isValid
+}
+<#
+.SYNOPSIS
+    Muestra encabezado de auditoría
+#>
+function Show-AuditHeader {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [switch]$ForFase3,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Title = "AUDITORÍA DE SISTEMA"
+    )
+    
+    if ($ForFase3) {
+        $header = @"
+
+╔═══════════════════════════════════════════════════╗
+║                                                   ║
+║         FASE 3: EXPORTACIÓN MULTIFORMATO          ║
+║                                                   ║
+╚═══════════════════════════════════════════════════╝
+
+Generando reportes en múltiples formatos...
+
+"@
+    } else {
+        $header = @"
+
+╔═══════════════════════════════════════════════════╗
+║                                                   ║
+║            $Title            ║
+║                                                   ║
+╚═══════════════════════════════════════════════════╝
+
+"@
+    }
+    
+    Write-Host $header -ForegroundColor Cyan
+}
+
+<#
+.SYNOPSIS
+    Proporciona valores por defecto para propiedades requeridas
+#>
+function Get-DefaultValue {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$DataType = 'String'
+    )
+    
+    $defaults = @{
+        'ComputerName' = $env:COMPUTERNAME
+        'OSName' = 'No detectado'
+        'SistemaOperativo' = 'No detectado'
+        'OSVersion' = 'Desconocido'
+        'Architecture' = 'Desconocido'
+        'Manufacturer' = 'Desconocido'
+        'Model' = 'Desconocido'
+        'TotalRAMGB' = 0
+        'ProcessorName' = 'No detectado'
+        'DriveLetter' = 'N/A'
+        'Label' = 'Sin etiqueta'
+        'FileSystem' = 'Desconocido'
+        'SizeGB' = 0
+        'FreeSpaceGB' = 0
+        'UsedSpaceGB' = 0
+        'PercentFree' = 0
+        'IPAddress' = '0.0.0.0'
+        'MACAddress' = '00:00:00:00:00:00'
+        'Status' = 'Desconocido'
+        'HealthStatus' = 'Desconocido'
+        'Timestamp' = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+        'FaseOrigen' = 'Desconocido'
+    }
+    
+    if ($defaults.ContainsKey($PropertyName)) {
+        return $defaults[$PropertyName]
+    } else {
+        # Valores por defecto según tipo de dato
+        switch ($DataType) {
+            'String' { return 'N/A' }
+            'Int' { return 0 }
+            'Double' { return 0.0 }
+            'Boolean' { return $false }
+            'DateTime' { return Get-Date }
+            default { return $null }
+        }
+    }
+}
+
+#endregion
+
+#region CLASES DE DATOS UNIFICADAS
+
+<#
+.SYNOPSIS
+    Clase base para todas las entidades de auditoría
+#>
+class AuditBase {
+    [string]$Timestamp
+    [string]$ComputerName
+    [string]$FaseOrigen
+    
+    AuditBase() {
+        $this.Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $this.ComputerName = $env:COMPUTERNAME
+        $this.FaseOrigen = "Desconocido"
+    }
+    
+    AuditBase([string]$faseOrigen) {
+        $this.Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $this.ComputerName = $env:COMPUTERNAME
+        $this.FaseOrigen = $faseOrigen
+    }
+}
+
+<#
+.SYNOPSIS
+    Clase para información del sistema
+#>
+class SystemInfo : AuditBase {
+    [string]$OSName
+    [string]$SistemaOperativo
+    [string]$OSVersion
+    [string]$Architecture
+    [string]$Manufacturer
+    [string]$Model
+    [double]$TotalRAMGB
+    [string]$ProcessorName
+    [int]$ProcessorCores
+    [string]$SerialNumber
+    [string]$Domain
+    [string]$LastBootTime
+    [double]$UptimeDays
+    
+    SystemInfo() : base() {
+        $this.OSName = Get-DefaultValue -PropertyName 'OSName'
+        $this.SistemaOperativo = Get-DefaultValue -PropertyName 'SistemaOperativo'
+        $this.OSVersion = Get-DefaultValue -PropertyName 'OSVersion'
+        $this.Architecture = Get-DefaultValue -PropertyName 'Architecture'
+        $this.Manufacturer = Get-DefaultValue -PropertyName 'Manufacturer'
+        $this.Model = Get-DefaultValue -PropertyName 'Model'
+        $this.TotalRAMGB = 0
+        $this.ProcessorName = Get-DefaultValue -PropertyName 'ProcessorName'
+        $this.ProcessorCores = 0
+        $this.SerialNumber = "N/A"
+        $this.Domain = "N/A"
+        $this.LastBootTime = "N/A"
+        $this.UptimeDays = 0
+    }
+    
+    SystemInfo([string]$faseOrigen) : base($faseOrigen) {
+        $this.OSName = Get-DefaultValue -PropertyName 'OSName'
+        $this.SistemaOperativo = Get-DefaultValue -PropertyName 'SistemaOperativo'
+        $this.OSVersion = Get-DefaultValue -PropertyName 'OSVersion'
+        $this.Architecture = Get-DefaultValue -PropertyName 'Architecture'
+        $this.Manufacturer = Get-DefaultValue -PropertyName 'Manufacturer'
+        $this.Model = Get-DefaultValue -PropertyName 'Model'
+        $this.TotalRAMGB = 0
+        $this.ProcessorName = Get-DefaultValue -PropertyName 'ProcessorName'
+        $this.ProcessorCores = 0
+        $this.SerialNumber = "N/A"
+        $this.Domain = "N/A"
+        $this.LastBootTime = "N/A"
+        $this.UptimeDays = 0
+    }
+    
+    <#
+    .SYNOPSIS
+        Convierte el objeto a hashtable para Fase 3
+    #>
+    [hashtable] ToFase3HashTable() {
+        return @{
+            ComputerName = $this.ComputerName
+            OSName = $this.OSName
+            SistemaOperativo = $this.SistemaOperativo
+            OSVersion = $this.OSVersion
+            Architecture = $this.Architecture
+            Manufacturer = $this.Manufacturer
+            Model = $this.Model
+            TotalRAMGB = $this.TotalRAMGB
+            ProcessorName = $this.ProcessorName
+            ProcessorCores = $this.ProcessorCores
+            SerialNumber = $this.SerialNumber
+            Domain = $this.Domain
+            LastBootTime = $this.LastBootTime
+            UptimeDays = $this.UptimeDays
+            Timestamp = $this.Timestamp
+            FaseOrigen = $this.FaseOrigen
+        }
+    }
+    
+    <#
+    .SYNOPSIS
+        Valida si el objeto es válido para exportación
+    #>
+    [bool] IsValidForExport() {
+        $isValid = $true
+        
+        if ([string]::IsNullOrWhiteSpace($this.ComputerName)) {
+            $isValid = $false
+        }
+        
+        if ([string]::IsNullOrWhiteSpace($this.OSName) -and [string]::IsNullOrWhiteSpace($this.SistemaOperativo)) {
+            $isValid = $false
+        }
+        
+        return $isValid
+    }
+    
+    <#
+    .SYNOPSIS
+        Sincroniza propiedades compatibles (OSName <-> SistemaOperativo)
+    #>
+    [void] SyncProperties() {
+        # Sincronizar OSName y SistemaOperativo
+        if ([string]::IsNullOrWhiteSpace($this.SistemaOperativo) -and -not [string]::IsNullOrWhiteSpace($this.OSName)) {
+            $this.SistemaOperativo = $this.OSName
+        } elseif ([string]::IsNullOrWhiteSpace($this.OSName) -and -not [string]::IsNullOrWhiteSpace($this.SistemaOperativo)) {
+            $this.OSName = $this.SistemaOperativo
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    Clase para información de discos
+#>
+class DiskInfo : AuditBase {
+    [string]$DriveLetter
+    [string]$Label
+    [string]$FileSystem
+    [double]$SizeGB
+    [double]$TotalSizeGB
+    [double]$FreeSpaceGB
+    [double]$UsedSpaceGB
+    [double]$PercentFree
+    [double]$PercentUsed
+    [string]$DriveType
+    [string]$HealthStatus
+    
+    DiskInfo() : base() {
+        $this.DriveLetter = Get-DefaultValue -PropertyName 'DriveLetter'
+        $this.Label = Get-DefaultValue -PropertyName 'Label'
+        $this.FileSystem = Get-DefaultValue -PropertyName 'FileSystem'
+        $this.SizeGB = 0
+        $this.TotalSizeGB = 0
+        $this.FreeSpaceGB = 0
+        $this.UsedSpaceGB = 0
+        $this.PercentFree = 0
+        $this.PercentUsed = 0
+        $this.DriveType = "Unknown"
+        $this.HealthStatus = Get-DefaultValue -PropertyName 'HealthStatus'
+    }
+    
+    DiskInfo([string]$faseOrigen) : base($faseOrigen) {
+        $this.DriveLetter = Get-DefaultValue -PropertyName 'DriveLetter'
+        $this.Label = Get-DefaultValue -PropertyName 'Label'
+        $this.FileSystem = Get-DefaultValue -PropertyName 'FileSystem'
+        $this.SizeGB = 0
+        $this.TotalSizeGB = 0
+        $this.FreeSpaceGB = 0
+        $this.UsedSpaceGB = 0
+        $this.PercentFree = 0
+        $this.PercentUsed = 0
+        $this.DriveType = "Unknown"
+        $this.HealthStatus = Get-DefaultValue -PropertyName 'HealthStatus'
+    }
+    
+    <#
+    .SYNOPSIS
+        Sincroniza propiedades compatibles (SizeGB <-> TotalSizeGB, etc.)
+    #>
+    [void] SyncProperties() {
+        # Sincronizar SizeGB y TotalSizeGB
+        if ($this.TotalSizeGB -eq 0 -and $this.SizeGB -gt 0) {
+            $this.TotalSizeGB = $this.SizeGB
+        } elseif ($this.SizeGB -eq 0 -and $this.TotalSizeGB -gt 0) {
+            $this.SizeGB = $this.TotalSizeGB
+        }
+        
+        # Calcular espacio usado si no está establecido
+        if ($this.UsedSpaceGB -eq 0 -and $this.TotalSizeGB -gt 0) {
+            $this.UsedSpaceGB = $this.TotalSizeGB - $this.FreeSpaceGB
+        }
+        
+        # Calcular porcentajes si el tamaño total es mayor que 0
+        if ($this.TotalSizeGB -gt 0) {
+            $this.PercentFree = [math]::Round(($this.FreeSpaceGB / $this.TotalSizeGB) * 100, 2)
+            $this.PercentUsed = [math]::Round(($this.UsedSpaceGB / $this.TotalSizeGB) * 100, 2)
+        }
+    }
+    
+    <#
+    .SYNOPSIS
+        Convierte el objeto a hashtable simple
+    #>
+    [hashtable] ToSimpleHashTable() {
+        return @{
+            DriveLetter = $this.DriveLetter
+            Label = $this.Label
+            FileSystem = $this.FileSystem
+            SizeGB = $this.SizeGB
+            TotalSizeGB = $this.TotalSizeGB
+            FreeSpaceGB = $this.FreeSpaceGB
+            UsedSpaceGB = $this.UsedSpaceGB
+            PercentFree = $this.PercentFree
+            PercentUsed = $this.PercentUsed
+            DriveType = $this.DriveType
+            HealthStatus = $this.HealthStatus
+            ComputerName = $this.ComputerName
+            Timestamp = $this.Timestamp
+            FaseOrigen = $this.FaseOrigen
+        }
+    }
+    
+    <#
+    .SYNOPSIS
+        Obtiene el estado de salud del disco
+    #>
+    [string] GetHealthStatus() {
+        if ($this.PercentFree -ge 20) {
+            return "Saludable"
+        } elseif ($this.PercentFree -ge 10) {
+            return "Advertencia"
+        } else {
+            return "Crítico"
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    Clase para información de red
+#>
+class NetworkInfo : AuditBase {
+    [string]$InterfaceName
+    [string]$IPAddress
+    [string]$SubnetMask
+    [string]$DefaultGateway
+    [string]$DNSServers
+    [string]$MACAddress
+    [string]$Status
+    [string]$ConnectionType
+    [double]$SpeedMbps
+    [bool]$DHCPEnabled
+    
+    NetworkInfo() : base() {
+        $this.InterfaceName = "N/A"
+        $this.IPAddress = Get-DefaultValue -PropertyName 'IPAddress'
+        $this.SubnetMask = "N/A"
+        $this.DefaultGateway = "N/A"
+        $this.DNSServers = "N/A"
+        $this.MACAddress = Get-DefaultValue -PropertyName 'MACAddress'
+        $this.Status = Get-DefaultValue -PropertyName 'Status'
+        $this.ConnectionType = "Unknown"
+        $this.SpeedMbps = 0
+        $this.DHCPEnabled = $false
+    }
+    
+    NetworkInfo([string]$faseOrigen) : base($faseOrigen) {
+        $this.InterfaceName = "N/A"
+        $this.IPAddress = Get-DefaultValue -PropertyName 'IPAddress'
+        $this.SubnetMask = "N/A"
+        $this.DefaultGateway = "N/A"
+        $this.DNSServers = "N/A"
+        $this.MACAddress = Get-DefaultValue -PropertyName 'MACAddress'
+        $this.Status = Get-DefaultValue -PropertyName 'Status'
+        $this.ConnectionType = "Unknown"
+        $this.SpeedMbps = 0
+        $this.DHCPEnabled = $false
+    }
+    
+    <#
+    .SYNOPSIS
+        Convierte el objeto a hashtable para Fase 3
+    #>
+    [hashtable] ToFase3HashTable() {
+        return @{
+            ComputerName = $this.ComputerName
+            InterfaceName = $this.InterfaceName
+            IPAddress = $this.IPAddress
+            SubnetMask = $this.SubnetMask
+            DefaultGateway = $this.DefaultGateway
+            DNSServers = $this.DNSServers
+            MACAddress = $this.MACAddress
+            Status = $this.Status
+            ConnectionType = $this.ConnectionType
+            SpeedMbps = $this.SpeedMbps
+            DHCPEnabled = $this.DHCPEnabled
+            Timestamp = $this.Timestamp
+            FaseOrigen = $this.FaseOrigen
+        }
+    }
+    
+    <#
+    .SYNOPSIS
+        Sincroniza propiedades si es necesario
+    #>
+    [void] SyncProperties() {
+        # Validar formato de IP
+        if ($this.IPAddress -eq "0.0.0.0" -or [string]::IsNullOrWhiteSpace($this.IPAddress)) {
+            $this.IPAddress = Get-DefaultValue -PropertyName 'IPAddress'
+        }
+        
+        # Validar formato de MAC
+        if ([string]::IsNullOrWhiteSpace($this.MACAddress)) {
+            $this.MACAddress = Get-DefaultValue -PropertyName 'MACAddress'
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    Clase para contener todos los datos de exportación
+#>
+class ExportData {
+    [SystemInfo]$SystemInfo
+    [DiskInfo[]]$Disks
+    [NetworkInfo]$NetworkInfo
+    [string]$ComputerName
+    [string]$Timestamp
+    [hashtable]$PhaseFolders
+    
+    ExportData() {
+        $this.SystemInfo = [SystemInfo]::new()
+        $this.Disks = @()
+        $this.NetworkInfo = [NetworkInfo]::new()
+        $this.ComputerName = $env:COMPUTERNAME
+        $this.Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $this.PhaseFolders = @{}
+    }
+    
+    <#
+    .SYNOPSIS
+        Prepara los datos para Fase 3 convirtiéndolos a hashtables
+    #>
+    [hashtable] PrepareForFase3() {
+        # Sincronizar propiedades antes de exportar
+        if ($this.SystemInfo) {
+            $this.SystemInfo.SyncProperties()
+        }
+        
+        if ($this.NetworkInfo) {
+            $this.NetworkInfo.SyncProperties()
+        }
+        
+        # Sincronizar cada disco
+        $diskHashTables = @()
+        foreach ($disk in $this.Disks) {
+            if ($disk) {
+                $disk.SyncProperties()
+                $diskHashTables += $disk.ToSimpleHashTable()
+            }
+        }
+        
+        # Crear hashtable consolidado
+        $result = @{
+            SystemInfo = if ($this.SystemInfo) { $this.SystemInfo.ToFase3HashTable() } else { @{} }
+            Disks = $diskHashTables
+            NetworkInfo = if ($this.NetworkInfo) { $this.NetworkInfo.ToFase3HashTable() } else { @{} }
+            ComputerName = $this.ComputerName
+            Timestamp = $this.Timestamp
+            PhaseFolders = $this.PhaseFolders
+        }
+        
+        return $result
+    }
+    
+    <#
+    .SYNOPSIS
+        Valida que los datos sean válidos para exportación
+    #>
+    [bool] IsValidForExport() {
+        $isValid = $true
+        
+        if (-not $this.SystemInfo -or -not $this.SystemInfo.IsValidForExport()) {
+            Write-Log "ExportData: SystemInfo no es válido para exportación" -Level WARNING
+            $isValid = $false
+        }
+        
+        if (-not $this.Disks -or $this.Disks.Count -eq 0) {
+            Write-Log "ExportData: No hay información de discos" -Level WARNING
+        }
+        
+        if (-not $this.NetworkInfo) {
+            Write-Log "ExportData: No hay información de red" -Level WARNING
+        }
+        
+        return $isValid
+    }
+}
+
+<#
+.SYNOPSIS
+    Clase para resultados de exportación individual
+#>
+class ExportResult {
+    [string]$Format
+    [string]$FilePath
+    [bool]$Success
+    [string]$ErrorMessage
+    [long]$FileSizeBytes
+    [string]$Timestamp
+    
+    ExportResult() {
+        $this.Format = "Unknown"
+        $this.FilePath = ""
+        $this.Success = $false
+        $this.ErrorMessage = ""
+        $this.FileSizeBytes = 0
+        $this.Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    }
+    
+    ExportResult([string]$format, [string]$filePath, [bool]$success) {
+        $this.Format = $format
+        $this.FilePath = $filePath
+        $this.Success = $success
+        $this.ErrorMessage = ""
+        $this.Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        
+        # Obtener tamaño del archivo si existe
+        if ($success -and (Test-Path -Path $filePath)) {
+            try {
+                $fileInfo = Get-Item -Path $filePath
+                $this.FileSizeBytes = $fileInfo.Length
+            } catch {
+                $this.FileSizeBytes = 0
+            }
+        }
+    }
+    
+    <#
+    .SYNOPSIS
+        Convierte el tamaño del archivo a formato legible
+    #>
+    [string] GetReadableSize() {
+        if ($this.FileSizeBytes -lt 1KB) {
+            return "$($this.FileSizeBytes) bytes"
+        } elseif ($this.FileSizeBytes -lt 1MB) {
+            return "$([math]::Round($this.FileSizeBytes / 1KB, 2)) KB"
+        } else {
+            return "$([math]::Round($this.FileSizeBytes / 1MB, 2)) MB"
+        }
+    }
+}
+
+#endregion
+
+#region FUNCIONES DE FASE 1
+
+<#
+.SYNOPSIS
+    Ejecuta la Fase 1: Configuración básica y recolección inicial
+#>
+function Invoke-Fase1 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Timestamp,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$PhaseFolders
+    )
+    
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    Write-Log "INICIANDO FASE 1: Configuración Básica" -Level INFO
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    
+    Show-Progress -PhaseNumber 1 -Activity "Fase 1: Configuración Básica"
+    
+    try {
+        # Verificar módulos requeridos
+        Write-Log "Verificando módulos de PowerShell..." -Level INFO
+        $modulesOk = Test-Modules -RequiredModules @('CimCmdlets', 'Storage')
+        
+        if (-not $modulesOk) {
+            Write-Log "ADVERTENCIA: Algunos módulos no están disponibles. Continuando con funcionalidad limitada..." -Level WARNING
+        }
+        
+        # Recolectar información básica del sistema
+        Write-Log "Recolectando información básica del sistema..." -Level INFO
+        $auditData = Get-SystemAuditBasic -ComputerName $ComputerName -Timestamp $Timestamp -PhaseFolders $PhaseFolders
+        
+        if (-not $auditData) {
+            Write-Log "ERROR: No se pudo recolectar información básica del sistema" -Level ERROR
+            return $null
+        }
+        
+        # Validar datos recolectados
+        Write-Log "Validando datos recolectados..." -Level INFO
+        $isValid = Test-ExportData -Data $auditData
+        
+        if (-not $isValid) {
+            Write-Log "ADVERTENCIA: Algunos datos no son válidos. Se usarán valores por defecto." -Level WARNING
+        }
+        
+        Write-Log "FASE 1 COMPLETADA EXITOSAMENTE" -Level SUCCESS
+        Write-Log "═══════════════════════════════════════════" -Level INFO
+        
+        return $auditData
+        
+    } catch {
+        Write-Log "ERROR CRÍTICO EN FASE 1: $_" -Level ERROR
+        Write-Log "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
+        return $null
+    }
+}
+
+<#
+.SYNOPSIS
+    Recolecta información básica del sistema para Fase 1
+#>
+function Get-SystemAuditBasic {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Timestamp,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$PhaseFolders
+    )
+    
+    Write-Log "Iniciando recolección de datos básicos..." -Level INFO
+    
+    # Crear objeto ExportData
+    $exportData = [ExportData]::new()
+    $exportData.ComputerName = $ComputerName
+    $exportData.Timestamp = $Timestamp
+    $exportData.PhaseFolders = $PhaseFolders
+    
+    #region Recolectar Información del Sistema
+    
+    Write-Log "  → Obteniendo información del sistema operativo..." -Level INFO
+    
+    try {
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+        $cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
+        $proc = Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop | Select-Object -First 1
+        
+        # Crear objeto SystemInfo
+        $systemInfo = [SystemInfo]::new("Fase1")
+        $systemInfo.ComputerName = $ComputerName
+        $systemInfo.OSName = if ($os.Caption) { $os.Caption } else { Get-DefaultValue -PropertyName 'OSName' }
+        $systemInfo.SistemaOperativo = $systemInfo.OSName
+        $systemInfo.OSVersion = if ($os.Version) { $os.Version } else { Get-DefaultValue -PropertyName 'OSVersion' }
+        $systemInfo.Architecture = if ($os.OSArchitecture) { $os.OSArchitecture } else { Get-DefaultValue -PropertyName 'Architecture' }
+        $systemInfo.Manufacturer = if ($cs.Manufacturer) { $cs.Manufacturer } else { Get-DefaultValue -PropertyName 'Manufacturer' }
+        $systemInfo.Model = if ($cs.Model) { $cs.Model } else { Get-DefaultValue -PropertyName 'Model' }
+        
+        # Calcular RAM total en GB
+        if ($cs.TotalPhysicalMemory) {
+            $systemInfo.TotalRAMGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 2)
+        } else {
+            $systemInfo.TotalRAMGB = 0
+        }
+        
+        $systemInfo.ProcessorName = if ($proc.Name) { $proc.Name } else { Get-DefaultValue -PropertyName 'ProcessorName' }
+        $systemInfo.ProcessorCores = if ($proc.NumberOfCores) { $proc.NumberOfCores } else { 0 }
+        
+        # Información adicional
+        $systemInfo.SerialNumber = if ($cs.SystemFamily) { $cs.SystemFamily } else { "N/A" }
+        $systemInfo.Domain = if ($cs.Domain) { $cs.Domain } else { "WORKGROUP" }
+        
+        # Calcular uptime
+        if ($os.LastBootUpTime) {
+            $bootTime = $os.LastBootUpTime
+            $systemInfo.LastBootTime = $bootTime.ToString("yyyy-MM-dd HH:mm:ss")
+            $uptime = (Get-Date) - $bootTime
+            $systemInfo.UptimeDays = [math]::Round($uptime.TotalDays, 2)
+        } else {
+            $systemInfo.LastBootTime = "N/A"
+            $systemInfo.UptimeDays = 0
+        }
+        
+        # Sincronizar propiedades
+        $systemInfo.SyncProperties()
+        
+        # Asignar a exportData
+        $exportData.SystemInfo = $systemInfo
+        
+        Write-Log "    ✓ Sistema: $($systemInfo.OSName)" -Level SUCCESS
+        Write-Log "    ✓ Procesador: $($systemInfo.ProcessorName)" -Level SUCCESS
+        Write-Log "    ✓ RAM: $($systemInfo.TotalRAMGB) GB" -Level SUCCESS
+        
+    } catch {
+        Write-Log "    ✗ Error al obtener información del sistema: $_" -Level ERROR
+        
+        # Crear SystemInfo con valores por defecto
+        $systemInfo = [SystemInfo]::new("Fase1")
+        $systemInfo.ComputerName = $ComputerName
+        $exportData.SystemInfo = $systemInfo
+    }
+    
+    #endregion
+    
+    #region Recolectar Información de Discos
+    
+    Write-Log "  → Obteniendo información de discos..." -Level INFO
+    
+    try {
+        $disks = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
+        
+        $diskList = @()
+        
+        foreach ($disk in $disks) {
+            try {
+                $diskInfo = [DiskInfo]::new("Fase1")
+                $diskInfo.ComputerName = $ComputerName
+                $diskInfo.DriveLetter = if ($disk.DeviceID) { $disk.DeviceID } else { "N/A" }
+                $diskInfo.Label = if ($disk.VolumeName) { $disk.VolumeName } else { "Sin etiqueta" }
+                $diskInfo.FileSystem = if ($disk.FileSystem) { $disk.FileSystem } else { "Unknown" }
+                
+                # Calcular tamaños en GB
+                if ($disk.Size) {
+                    $diskInfo.SizeGB = [math]::Round($disk.Size / 1GB, 2)
+                    $diskInfo.TotalSizeGB = $diskInfo.SizeGB
+                } else {
+                    $diskInfo.SizeGB = 0
+                    $diskInfo.TotalSizeGB = 0
+                }
+                
+                if ($disk.FreeSpace) {
+                    $diskInfo.FreeSpaceGB = [math]::Round($disk.FreeSpace / 1GB, 2)
+                } else {
+                    $diskInfo.FreeSpaceGB = 0
+                }
+                
+                # Tipo de unidad
+                $diskInfo.DriveType = "Local Disk"
+                
+                # Sincronizar propiedades (calculará UsedSpace y porcentajes)
+                $diskInfo.SyncProperties()
+                
+                # Obtener estado de salud
+                $diskInfo.HealthStatus = $diskInfo.GetHealthStatus()
+                
+                $diskList += $diskInfo
+                
+                Write-Log "    ✓ Disco $($diskInfo.DriveLetter): $($diskInfo.TotalSizeGB) GB total, $($diskInfo.FreeSpaceGB) GB libre ($($diskInfo.PercentFree)%)" -Level SUCCESS
+                
+            } catch {
+                Write-Log "    ✗ Error al procesar disco ${disk.DeviceID}: $_" -Level ERROR
+            }
+        }
+        
+        $exportData.Disks = $diskList
+        Write-Log "    ✓ Total de discos procesados: $($diskList.Count)" -Level SUCCESS
+        
+    } catch {
+        Write-Log "    ✗ Error al obtener información de discos: $_" -Level ERROR
+        $exportData.Disks = @()
+    }
+    
+    #endregion
+    
+    #region Recolectar Información de Red
+    
+    Write-Log "  → Obteniendo información de red..." -Level INFO
+    
+    try {
+        # Obtener adaptador de red activo
+        $netAdapter = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" -ErrorAction Stop | Select-Object -First 1
+        
+        if ($netAdapter) {
+            $networkInfo = [NetworkInfo]::new("Fase1")
+            $networkInfo.ComputerName = $ComputerName
+            
+            # Obtener nombre del adaptador
+            $adapter = Get-CimInstance -ClassName Win32_NetworkAdapter -Filter "Index=$($netAdapter.Index)" -ErrorAction SilentlyContinue
+            $networkInfo.InterfaceName = if ($adapter -and $adapter.NetConnectionID) { $adapter.NetConnectionID } else { "Adaptador de red principal" }
+            
+            # IP Address
+            if ($netAdapter.IPAddress -and $netAdapter.IPAddress.Count -gt 0) {
+                $networkInfo.IPAddress = $netAdapter.IPAddress[0]
+            } else {
+                $networkInfo.IPAddress = Get-DefaultValue -PropertyName 'IPAddress'
+            }
+            
+            # Subnet Mask
+            if ($netAdapter.IPSubnet -and $netAdapter.IPSubnet.Count -gt 0) {
+                $networkInfo.SubnetMask = $netAdapter.IPSubnet[0]
+            } else {
+                $networkInfo.SubnetMask = "N/A"
+            }
+            
+            # Default Gateway
+            if ($netAdapter.DefaultIPGateway -and $netAdapter.DefaultIPGateway.Count -gt 0) {
+                $networkInfo.DefaultGateway = $netAdapter.DefaultIPGateway[0]
+            } else {
+                $networkInfo.DefaultGateway = "N/A"
+            }
+            
+            # DNS Servers
+            if ($netAdapter.DNSServerSearchOrder -and $netAdapter.DNSServerSearchOrder.Count -gt 0) {
+                $networkInfo.DNSServers = $netAdapter.DNSServerSearchOrder -join ", "
+            } else {
+                $networkInfo.DNSServers = "N/A"
+            }
+            
+            # MAC Address
+            if ($netAdapter.MACAddress) {
+                $networkInfo.MACAddress = $netAdapter.MACAddress
+            } else {
+                $networkInfo.MACAddress = Get-DefaultValue -PropertyName 'MACAddress'
+            }
+            
+            # DHCP Enabled
+            $networkInfo.DHCPEnabled = if ($netAdapter.DHCPEnabled) { $netAdapter.DHCPEnabled } else { $false }
+            
+            # Status
+            $networkInfo.Status = "Conectado"
+            $networkInfo.ConnectionType = "Ethernet/Wi-Fi"
+            
+            # Speed (si está disponible)
+            if ($adapter -and $adapter.Speed) {
+                $networkInfo.SpeedMbps = [math]::Round($adapter.Speed / 1MB, 0)
+            } else {
+                $networkInfo.SpeedMbps = 0
+            }
+            
+            # Sincronizar propiedades
+            $networkInfo.SyncProperties()
+            
+            $exportData.NetworkInfo = $networkInfo
+            
+            Write-Log "    ✓ Interfaz: $($networkInfo.InterfaceName)" -Level SUCCESS
+            Write-Log "    ✓ IP: $($networkInfo.IPAddress)" -Level SUCCESS
+            Write-Log "    ✓ MAC: $($networkInfo.MACAddress)" -Level SUCCESS
+            
+        } else {
+            Write-Log "    ! No se encontraron adaptadores de red activos" -Level WARNING
+            $exportData.NetworkInfo = [NetworkInfo]::new("Fase1")
+            $exportData.NetworkInfo.ComputerName = $ComputerName
+        }
+        
+    } catch {
+        Write-Log "    ✗ Error al obtener información de red: $_" -Level ERROR
+        $exportData.NetworkInfo = [NetworkInfo]::new("Fase1")
+        $exportData.NetworkInfo.ComputerName = $ComputerName
+    }
+    
+    #endregion
+    
+    #region Crear Reportes de Fase 1
+    
+    Write-Log "  → Generando reportes de Fase 1..." -Level INFO
+    
+    try {
+        # Verificar carpeta Fase1
+        if (-not (Test-Path -Path $PhaseFolders.Fase1)) {
+            New-Item -ItemType Directory -Path $PhaseFolders.Fase1 -Force | Out-Null
+        }
+        
+        # Generar reporte básico en texto
+        $reportPath = Join-Path -Path $PhaseFolders.Fase1 -ChildPath "${ComputerName}_${Timestamp}_fase1_basic.txt"
+        
+        $reportContent = @"
+REPORTE BÁSICO - FASE 1
+========================
+Generado: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+Equipo: $ComputerName
+
+SISTEMA OPERATIVO:
+------------------
+Nombre: $($exportData.SystemInfo.OSName)
+Versión: $($exportData.SystemInfo.OSVersion)
+Arquitectura: $($exportData.SystemInfo.Architecture)
+
+HARDWARE:
+---------
+Fabricante: $($exportData.SystemInfo.Manufacturer)
+Modelo: $($exportData.SystemInfo.Model)
+Procesador: $($exportData.SystemInfo.ProcessorName)
+Núcleos: $($exportData.SystemInfo.ProcessorCores)
+RAM Total: $($exportData.SystemInfo.TotalRAMGB) GB
+
+DISCOS:
+-------
+"@
+        
+        foreach ($disk in $exportData.Disks) {
+            $reportContent += "`nUnidad ${disk.DriveLetter}: $($disk.Label)"
+            $reportContent += "`n  Tamaño: $($disk.TotalSizeGB) GB | Libre: $($disk.FreeSpaceGB) GB | Usado: $($disk.PercentUsed)%"
+            $reportContent += "`n  Estado: $($disk.HealthStatus)"
+        }
+        
+        $reportContent += @"
+
+RED:
+----
+Interfaz: $($exportData.NetworkInfo.InterfaceName)
+IP: $($exportData.NetworkInfo.IPAddress)
+MAC: $($exportData.NetworkInfo.MACAddress)
+Gateway: $($exportData.NetworkInfo.DefaultGateway)
+DHCP: $($exportData.NetworkInfo.DHCPEnabled)
+
+========================
+FIN DEL REPORTE FASE 1
+========================
+"@
+        
+        $reportContent | Out-File -FilePath $reportPath -Encoding UTF8 -Force
+        Write-Log "    ✓ Reporte generado: $reportPath" -Level SUCCESS
+        
+    } catch {
+        Write-Log "    ✗ Error al generar reporte de Fase 1: $_" -Level ERROR
+    }
+    
+    #endregion
+    
+    #region Preparar y Retornar Datos para Fase 2
+    
+    Write-Log "  → Preparando datos para Fase 2..." -Level INFO
+    
+    # Convertir a hashtable usando PrepareForFase3
+    $result = $exportData.PrepareForFase3()
+    
+    Write-Log "    ✓ Datos preparados correctamente" -Level SUCCESS
+    Write-Log "Recolección básica completada exitosamente" -Level SUCCESS
+    
+    return $result
+    
+    #endregion
+}
+
+#endregion
+
+#region FUNCIONES DE FASE 2
+
+<#
+.SYNOPSIS
+    Ejecuta la Fase 2: Recolección detallada de información
+#>
+function Invoke-Fase2 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$SystemInfo,
+        
+        [Parameter(Mandatory = $true)]
+        [array]$Disks,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$NetworkInfo,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Timestamp,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$PhaseFolders
+    )
+    
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    Write-Log "INICIANDO FASE 2: Recolección Detallada" -Level INFO
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    
+    Show-Progress -PhaseNumber 2 -Activity "Fase 2: Recolección Detallada"
+    
+    try {
+        # Obtener información detallada del sistema
+        Write-Log "Obteniendo información detallada del sistema..." -Level INFO
+        $detailedSystemInfo = Get-SystemInformationF2 -BaseSystemInfo $SystemInfo -ComputerName $ComputerName
+        
+        # Obtener información detallada de discos
+        Write-Log "Obteniendo información detallada de discos..." -Level INFO
+        $detailedDisks = Get-DiskInformationF2 -BaseDisks $Disks -ComputerName $ComputerName
+        
+        # Obtener información detallada de red
+        Write-Log "Obteniendo información detallada de red..." -Level INFO
+        $detailedNetworkInfo = Get-NetworkInformationF2 -BaseNetworkInfo $NetworkInfo -ComputerName $ComputerName
+        
+        # Consolidar datos de Fase 1 y Fase 2
+        Write-Log "Consolidando datos de Fase 1 y Fase 2..." -Level INFO
+        $consolidatedData = Consolidate-DataForFase3 -Fase1Data @{
+            SystemInfo = $SystemInfo
+            Disks = $Disks
+            NetworkInfo = $NetworkInfo
+            ComputerName = $ComputerName
+            Timestamp = $Timestamp
+            PhaseFolders = $PhaseFolders
+        } -Fase2Data @{
+            SystemInfo = $detailedSystemInfo
+            Disks = $detailedDisks
+            NetworkInfo = $detailedNetworkInfo
+        }
+        
+        # Exportar reportes de Fase 2
+        Write-Log "Generando reportes de Fase 2..." -Level INFO
+        Export-Fase2Reports -Data $consolidatedData -PhaseFolders $PhaseFolders -ComputerName $ComputerName -Timestamp $Timestamp
+        
+        Write-Log "FASE 2 COMPLETADA EXITOSAMENTE" -Level SUCCESS
+        Write-Log "═══════════════════════════════════════════" -Level INFO
+        
+        return $consolidatedData
+        
+    } catch {
+        Write-Log "ERROR CRÍTICO EN FASE 2: $_" -Level ERROR
+        Write-Log "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
+        
+        # Retornar datos base si hay error
+        return @{
+            SystemInfo = $SystemInfo
+            Disks = $Disks
+            NetworkInfo = $NetworkInfo
+            ComputerName = $ComputerName
+            Timestamp = $Timestamp
+            PhaseFolders = $PhaseFolders
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    Consolida datos de Fase 1 y Fase 2 para Fase 3
+#>
+function Consolidate-DataForFase3 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Fase1Data,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Fase2Data
+    )
+    
+    Write-Log "  → Consolidando información del sistema..." -Level INFO
+    
+    # Crear hashtable consolidado basado en Fase1
+    $consolidated = @{
+        SystemInfo = $Fase1Data.SystemInfo.Clone()
+        Disks = @()
+        NetworkInfo = $Fase1Data.NetworkInfo.Clone()
+        ComputerName = $Fase1Data.ComputerName
+        Timestamp = $Fase1Data.Timestamp
+        PhaseFolders = $Fase1Data.PhaseFolders
+    }
+    
+    # Enriquecer SystemInfo con datos de Fase 2
+    if ($Fase2Data.SystemInfo) {
+        foreach ($key in $Fase2Data.SystemInfo.Keys) {
+            if ($Fase2Data.SystemInfo[$key] -and $Fase2Data.SystemInfo[$key] -ne "N/A" -and $Fase2Data.SystemInfo[$key] -ne "No detectado") {
+                $consolidated.SystemInfo[$key] = $Fase2Data.SystemInfo[$key]
+            }
+        }
+    }
+    
+    # Consolidar discos (mantener datos de Fase 1 y enriquecer con Fase 2)
+    $diskMap = @{}
+    
+    # Indexar discos de Fase 1 por letra
+    foreach ($disk in $Fase1Data.Disks) {
+        if ($disk.DriveLetter) {
+            $diskMap[$disk.DriveLetter] = $disk.Clone()
+        }
+    }
+    
+    # Enriquecer con datos de Fase 2
+    if ($Fase2Data.Disks) {
+        foreach ($disk2 in $Fase2Data.Disks) {
+            if ($disk2.DriveLetter) {
+                if ($diskMap.ContainsKey($disk2.DriveLetter)) {
+                    # Actualizar disco existente
+                    foreach ($key in $disk2.Keys) {
+                        if ($disk2[$key] -and $disk2[$key] -ne "N/A" -and $disk2[$key] -ne 0) {
+                            $diskMap[$disk2.DriveLetter][$key] = $disk2[$key]
+                        }
+                    }
+                } else {
+                    # Agregar nuevo disco
+                    $diskMap[$disk2.DriveLetter] = $disk2
+                }
+            }
+        }
+    }
+    
+    # Convertir a array
+    $consolidated.Disks = $diskMap.Values | Sort-Object DriveLetter
+    
+    # Enriquecer NetworkInfo con datos de Fase 2
+    if ($Fase2Data.NetworkInfo) {
+        foreach ($key in $Fase2Data.NetworkInfo.Keys) {
+            if ($Fase2Data.NetworkInfo[$key] -and $Fase2Data.NetworkInfo[$key] -ne "N/A") {
+                $consolidated.NetworkInfo[$key] = $Fase2Data.NetworkInfo[$key]
+            }
+        }
+    }
+    
+    Write-Log "    ✓ Datos consolidados correctamente" -Level SUCCESS
+    
+    return $consolidated
+}
+
+<#
+.SYNOPSIS
+    Obtiene información detallada del sistema para Fase 2
+#>
+function Get-SystemInformationF2 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$BaseSystemInfo,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName
+    )
+    
+    Write-Log "  → Recolectando información detallada del sistema..." -Level INFO
+    
+    $detailedInfo = $BaseSystemInfo.Clone()
+    
+    try {
+        # Obtener información adicional del BIOS
+        $bios = Get-CimInstance -ClassName Win32_BIOS -ErrorAction SilentlyContinue
+        
+        if ($bios) {
+            if ($bios.SerialNumber) {
+                $detailedInfo.SerialNumber = $bios.SerialNumber
+                Write-Log "    ✓ Número de serie: $($bios.SerialNumber)" -Level SUCCESS
+            }
+        }
+        
+        # Obtener información de tiempo de actividad más precisa
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+        
+        if ($os -and $os.LastBootUpTime) {
+            $uptime = (Get-Date) - $os.LastBootUpTime
+            $detailedInfo.UptimeDays = [math]::Round($uptime.TotalDays, 2)
+            
+            $uptimeFormatted = if ($uptime.Days -gt 0) {
+                "$($uptime.Days)d $($uptime.Hours)h $($uptime.Minutes)m"
+            } elseif ($uptime.Hours -gt 0) {
+                "$($uptime.Hours)h $($uptime.Minutes)m"
+            } else {
+                "$($uptime.Minutes)m $($uptime.Seconds)s"
+            }
+            
+            Write-Log "    ✓ Tiempo de actividad: $uptimeFormatted" -Level SUCCESS
+        }
+        
+        # Obtener información de memoria más detallada
+        $memory = Get-CimInstance -ClassName Win32_PhysicalMemory -ErrorAction SilentlyContinue
+        
+        if ($memory) {
+            $totalSlots = ($memory | Measure-Object).Count
+            $totalCapacityGB = ($memory | Measure-Object -Property Capacity -Sum).Sum / 1GB
+            
+            $detailedInfo.TotalRAMGB = [math]::Round($totalCapacityGB, 2)
+            Write-Log "    ✓ Módulos de RAM: $totalSlots slots, Total: $($detailedInfo.TotalRAMGB) GB" -Level SUCCESS
+        }
+        
+        # Información del procesador más detallada
+        $processor = Get-CimInstance -ClassName Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
+        
+        if ($processor) {
+            if ($processor.MaxClockSpeed) {
+                $clockSpeedGHz = [math]::Round($processor.MaxClockSpeed / 1000, 2)
+                $detailedInfo.ProcessorName = "$($processor.Name) @ ${clockSpeedGHz} GHz"
+            }
+            
+            if ($processor.NumberOfLogicalProcessors) {
+                $detailedInfo.ProcessorCores = $processor.NumberOfLogicalProcessors
+            }
+            
+            Write-Log "    ✓ Procesador detallado: $($detailedInfo.ProcessorName)" -Level SUCCESS
+        }
+        
+    } catch {
+        Write-Log "    ! Error al obtener información detallada: $_" -Level WARNING
+    }
+    
+    return $detailedInfo
+}
+
+<#
+.SYNOPSIS
+    Obtiene información detallada de discos para Fase 2
+#>
+function Get-DiskInformationF2 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$BaseDisks,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName
+    )
+    
+    Write-Log "  → Recolectando información detallada de discos..." -Level INFO
+    
+    $detailedDisks = @()
+    
+    try {
+        # Obtener información de volúmenes
+        $volumes = Get-CimInstance -ClassName Win32_Volume -ErrorAction SilentlyContinue
+        
+        foreach ($baseDisk in $BaseDisks) {
+            $diskDetail = $baseDisk.Clone()
+            
+            # Buscar volumen correspondiente
+            $driveLetter = $baseDisk.DriveLetter
+            $volume = $volumes | Where-Object { $_.DriveLetter -eq $driveLetter } | Select-Object -First 1
+            
+            if ($volume) {
+                # Información adicional del sistema de archivos
+                if ($volume.FileSystem) {
+                    $diskDetail.FileSystem = $volume.FileSystem
+                }
+                
+                # Recalcular espacio con mayor precisión
+                if ($volume.Capacity) {
+                    $diskDetail.TotalSizeGB = [math]::Round($volume.Capacity / 1GB, 2)
+                    $diskDetail.SizeGB = $diskDetail.TotalSizeGB
+                }
+                
+                if ($volume.FreeSpace) {
+                    $diskDetail.FreeSpaceGB = [math]::Round($volume.FreeSpace / 1GB, 2)
+                }
+                
+                # Calcular espacio usado y porcentajes
+                if ($diskDetail.TotalSizeGB -gt 0) {
+                    $diskDetail.UsedSpaceGB = $diskDetail.TotalSizeGB - $diskDetail.FreeSpaceGB
+                    $diskDetail.PercentFree = [math]::Round(($diskDetail.FreeSpaceGB / $diskDetail.TotalSizeGB) * 100, 2)
+                    $diskDetail.PercentUsed = [math]::Round(($diskDetail.UsedSpaceGB / $diskDetail.TotalSizeGB) * 100, 2)
+                }
+                
+                # Determinar estado de salud basado en espacio libre
+                if ($diskDetail.PercentFree -ge 20) {
+                    $diskDetail.HealthStatus = "Saludable"
+                } elseif ($diskDetail.PercentFree -ge 10) {
+                    $diskDetail.HealthStatus = "Advertencia"
+                } else {
+                    $diskDetail.HealthStatus = "Crítico"
+                }
+                
+                Write-Log "    ✓ Disco $driveLetter actualizado: $($diskDetail.HealthStatus)" -Level SUCCESS
+            }
+            
+            # Actualizar FaseOrigen
+            $diskDetail.FaseOrigen = "Fase2"
+            
+            $detailedDisks += $diskDetail
+        }
+        
+        Write-Log "    ✓ Total de discos procesados: $($detailedDisks.Count)" -Level SUCCESS
+        
+    } catch {
+        Write-Log "    ! Error al obtener información detallada de discos: $_" -Level WARNING
+        $detailedDisks = $BaseDisks
+    }
+    
+    return $detailedDisks
+}
+
+<#
+.SYNOPSIS
+    Obtiene información detallada de red para Fase 2
+#>
+function Get-NetworkInformationF2 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$BaseNetworkInfo,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName
+    )
+    
+    Write-Log "  → Recolectando información detallada de red..." -Level INFO
+    
+    $detailedInfo = $BaseNetworkInfo.Clone()
+    
+    try {
+        # Obtener información de adaptadores de red
+        $adapters = Get-CimInstance -ClassName Win32_NetworkAdapter -Filter "NetEnabled=True" -ErrorAction SilentlyContinue
+        
+        if ($adapters) {
+            $primaryAdapter = $adapters | Select-Object -First 1
+            
+            if ($primaryAdapter) {
+                # Nombre completo del adaptador
+                if ($primaryAdapter.Name) {
+                    $detailedInfo.InterfaceName = $primaryAdapter.Name
+                }
+                
+                # Velocidad de conexión
+                if ($primaryAdapter.Speed) {
+                    $detailedInfo.SpeedMbps = [math]::Round($primaryAdapter.Speed / 1MB, 0)
+                    Write-Log "    ✓ Velocidad de red: $($detailedInfo.SpeedMbps) Mbps" -Level SUCCESS
+                }
+                
+                # Tipo de adaptador
+                if ($primaryAdapter.AdapterType) {
+                    $detailedInfo.ConnectionType = $primaryAdapter.AdapterType
+                }
+            }
+        }
+        
+        # Obtener configuración IP detallada
+        $ipConfig = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" -ErrorAction SilentlyContinue | Select-Object -First 1
+        
+        if ($ipConfig) {
+            # Información DNS adicional
+            if ($ipConfig.DNSDomain) {
+                $detailedInfo.DNSDomain = $ipConfig.DNSDomain
+            }
+            
+            # Servidor WINS (si aplica)
+            if ($ipConfig.WINSPrimaryServer) {
+                $detailedInfo.WINSServer = $ipConfig.WINSPrimaryServer
+            }
+            
+            Write-Log "    ✓ Configuración de red actualizada" -Level SUCCESS
+        }
+        
+        # Test de conectividad básico
+        try {
+            $pingResult = Test-Connection -ComputerName "8.8.8.8" -Count 1 -Quiet -ErrorAction SilentlyContinue
+            
+            if ($pingResult) {
+                $detailedInfo.Status = "Conectado - Internet OK"
+                Write-Log "    ✓ Conectividad a Internet: OK" -Level SUCCESS
+            } else {
+                $detailedInfo.Status = "Conectado - Sin Internet"
+                Write-Log "    ! Conectividad a Internet: No disponible" -Level WARNING
+            }
+        } catch {
+            $detailedInfo.Status = "Conectado"
+        }
+        
+    } catch {
+        Write-Log "    ! Error al obtener información detallada de red: $_" -Level WARNING
+    }
+    
+    # Actualizar FaseOrigen
+    $detailedInfo.FaseOrigen = "Fase2"
+    
+    return $detailedInfo
+}
+
+<#
+.SYNOPSIS
+    Exporta reportes de Fase 2 en formato CSV y JSON
+#>
+function Export-Fase2Reports {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Data,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$PhaseFolders,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Timestamp
+    )
+    
+    Write-Log "  → Generando reportes de Fase 2..." -Level INFO
+    
+    try {
+        # Verificar carpeta Fase2
+        if (-not (Test-Path -Path $PhaseFolders.Fase2)) {
+            New-Item -ItemType Directory -Path $PhaseFolders.Fase2 -Force | Out-Null
+        }
+        
+        # Exportar a JSON (para compatibilidad con Fase 3)
+        $jsonPath = Join-Path -Path $PhaseFolders.Fase2 -ChildPath "${ComputerName}_${Timestamp}_fase2_complete.json"
+        
+        $Data | ConvertTo-Json -Depth 5 | Out-File -FilePath $jsonPath -Encoding UTF8 -Force
+        Write-Log "    ✓ Reporte JSON generado: $jsonPath" -Level SUCCESS
+        
+        # Exportar información de discos a CSV
+        if ($Data.Disks -and $Data.Disks.Count -gt 0) {
+            $csvPath = Join-Path -Path $PhaseFolders.Fase2 -ChildPath "${ComputerName}_${Timestamp}_fase2_disks.csv"
+            
+            $Data.Disks | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -Force
+            Write-Log "    ✓ Reporte CSV de discos generado: $csvPath" -Level SUCCESS
+        }
+        
+        # Generar reporte de texto detallado
+        $txtPath = Join-Path -Path $PhaseFolders.Fase2 -ChildPath "${ComputerName}_${Timestamp}_fase2_detailed.txt"
+        
+        $reportContent = @"
+REPORTE DETALLADO - FASE 2
+===========================
+Generado: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+Equipo: $ComputerName
+
+INFORMACIÓN DEL SISTEMA:
+------------------------
+Sistema Operativo: $($Data.SystemInfo.OSName)
+Versión: $($Data.SystemInfo.OSVersion)
+Arquitectura: $($Data.SystemInfo.Architecture)
+Fabricante: $($Data.SystemInfo.Manufacturer)
+Modelo: $($Data.SystemInfo.Model)
+Número de Serie: $($Data.SystemInfo.SerialNumber)
+Dominio: $($Data.SystemInfo.Domain)
+
+HARDWARE:
+---------
+Procesador: $($Data.SystemInfo.ProcessorName)
+Núcleos: $($Data.SystemInfo.ProcessorCores)
+RAM Total: $($Data.SystemInfo.TotalRAMGB) GB
+Último Arranque: $($Data.SystemInfo.LastBootTime)
+Tiempo de Actividad: $($Data.SystemInfo.UptimeDays) días
+
+DISCOS:
+-------
+"@
+        
+        foreach ($disk in $Data.Disks) {
+            $reportContent += "`n"
+            $reportContent += "Unidad: $($disk.DriveLetter)`n"
+            $reportContent += "  Etiqueta: $($disk.Label)`n"
+            $reportContent += "  Sistema de archivos: $($disk.FileSystem)`n"
+            $reportContent += "  Capacidad total: $($disk.TotalSizeGB) GB`n"
+            $reportContent += "  Espacio libre: $($disk.FreeSpaceGB) GB ($($disk.PercentFree)%)`n"
+            $reportContent += "  Espacio usado: $($disk.UsedSpaceGB) GB ($($disk.PercentUsed)%)`n"
+            $reportContent += "  Estado de salud: $($disk.HealthStatus)`n"
+        }
+        
+        $reportContent += @"
+
+RED:
+----
+Interfaz: $($Data.NetworkInfo.InterfaceName)
+Dirección IP: $($Data.NetworkInfo.IPAddress)
+Máscara de subred: $($Data.NetworkInfo.SubnetMask)
+Puerta de enlace: $($Data.NetworkInfo.DefaultGateway)
+Servidores DNS: $($Data.NetworkInfo.DNSServers)
+Dirección MAC: $($Data.NetworkInfo.MACAddress)
+Estado: $($Data.NetworkInfo.Status)
+Tipo de conexión: $($Data.NetworkInfo.ConnectionType)
+Velocidad: $($Data.NetworkInfo.SpeedMbps) Mbps
+DHCP habilitado: $($Data.NetworkInfo.DHCPEnabled)
+
+===========================
+FIN DEL REPORTE FASE 2
+===========================
+"@
+        
+        $reportContent | Out-File -FilePath $txtPath -Encoding UTF8 -Force
+        Write-Log "    ✓ Reporte TXT generado: $txtPath" -Level SUCCESS
+        
+    } catch {
+        Write-Log "    ✗ Error al generar reportes de Fase 2: $_" -Level ERROR
+    }
+}
+
+#endregion
+
+#region FUNCIONES DE FASE 3
+
+<#
+.SYNOPSIS
+    Ejecuta la Fase 3: Exportación multiformato
+#>
+function Invoke-Fase3 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$SystemInfo,
+        
+        [Parameter(Mandatory = $true)]
+        [array]$Disks,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$NetworkInfo,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Timestamp,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$PhaseFolders,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$ExportHTML
+    )
+    
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    Write-Log "INICIANDO FASE 3: Exportación Multiformato" -Level INFO
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    
+    Show-AuditHeader -ForFase3
+    Show-Progress -PhaseNumber 3 -Activity "Fase 3: Exportación Multiformato"
+    
+    # Verificar carpeta Fase3
+    if (-not (Test-Path -Path $PhaseFolders.Fase3)) {
+        try {
+            New-Item -ItemType Directory -Path $PhaseFolders.Fase3 -Force | Out-Null
+            Write-Log "Carpeta Fase3 creada: $($PhaseFolders.Fase3)" -Level SUCCESS
+        } catch {
+            Write-Log "Error al crear carpeta Fase3: $_" -Level ERROR
+            return $null
+        }
+    }
+    
+    # Verificar dependencias de exportación
+    Write-Log "Verificando dependencias de exportación..." -Level INFO
+    $dependenciesOk = Test-ExportDependencies
+    
+    if (-not $dependenciesOk) {
+        Write-Log "ADVERTENCIA: Algunas funciones de exportación pueden no estar disponibles" -Level WARNING
+    }
+    
+    # Preparar datos para exportación
+    $exportData = @{
+        SystemInfo = $SystemInfo
+        Disks = $Disks
+        NetworkInfo = $NetworkInfo
+        ComputerName = $ComputerName
+        Timestamp = $Timestamp
+        PhaseFolders = $PhaseFolders
+    }
+    
+    # Validar datos antes de exportar
+    Write-Log "Validando datos para exportación..." -Level INFO
+    $isValid = Test-ExportData -Data $exportData
+    
+    if (-not $isValid) {
+        Write-Log "ADVERTENCIA: Algunos datos no son válidos. Se usarán valores por defecto." -Level WARNING
+    }
+    
+    # Array para almacenar resultados de exportación
+    $exportResults = @()
+    $generatedFiles = @()
+    
+    # EXPORTAR A CSV
+    Write-Log "" -Level INFO
+    Write-Log "→ Exportando a formato CSV..." -Level INFO
+    try {
+        $csvFile = Export-ToCSV -Data $exportData
+        
+        if ($csvFile) {
+            $result = [ExportResult]::new("CSV", $csvFile, $true)
+            $exportResults += $result
+            $generatedFiles += $csvFile
+            Write-Log "  ✓ Exportación CSV exitosa: $csvFile" -Level SUCCESS
+        } else {
+            $result = [ExportResult]::new("CSV", "", $false)
+            $result.ErrorMessage = "No se pudo generar el archivo CSV"
+            $exportResults += $result
+            Write-Log "  ✗ Error en exportación CSV" -Level ERROR
+        }
+    } catch {
+        Write-Log "  ✗ Error crítico en exportación CSV: $_" -Level ERROR
+        $result = [ExportResult]::new("CSV", "", $false)
+        $result.ErrorMessage = $_.Exception.Message
+        $exportResults += $result
+    }
+    
+    # EXPORTAR A JSON
+    Write-Log "" -Level INFO
+    Write-Log "→ Exportando a formato JSON..." -Level INFO
+    try {
+        $jsonFile = Export-ToJSON -Data $exportData
+        
+        if ($jsonFile) {
+            $result = [ExportResult]::new("JSON", $jsonFile, $true)
+            $exportResults += $result
+            $generatedFiles += $jsonFile
+            Write-Log "  ✓ Exportación JSON exitosa: $jsonFile" -Level SUCCESS
+        } else {
+            $result = [ExportResult]::new("JSON", "", $false)
+            $result.ErrorMessage = "No se pudo generar el archivo JSON"
+            $exportResults += $result
+            Write-Log "  ✗ Error en exportación JSON" -Level ERROR
+        }
+    } catch {
+        Write-Log "  ✗ Error crítico en exportación JSON: $_" -Level ERROR
+        $result = [ExportResult]::new("JSON", "", $false)
+        $result.ErrorMessage = $_.Exception.Message
+        $exportResults += $result
+    }
+    
+    # EXPORTAR A HTML (solo si está habilitado)
+    if ($ExportHTML) {
+        Write-Log "" -Level INFO
+        Write-Log "→ Exportando a formato HTML..." -Level INFO
+        try {
+            $htmlFile = Export-ToHTML -Data $exportData
+            
+            if ($htmlFile) {
+                $result = [ExportResult]::new("HTML", $htmlFile, $true)
+                $exportResults += $result
+                $generatedFiles += $htmlFile
+                Write-Log "  ✓ Exportación HTML exitosa: $htmlFile" -Level SUCCESS
+            } else {
+                $result = [ExportResult]::new("HTML", "", $false)
+                $result.ErrorMessage = "No se pudo generar el archivo HTML"
+                $exportResults += $result
+                Write-Log "  ✗ Error en exportación HTML" -Level ERROR
+            }
+        } catch {
+            Write-Log "  ✗ Error crítico en exportación HTML: $_" -Level ERROR
+            $result = [ExportResult]::new("HTML", "", $false)
+            $result.ErrorMessage = $_.Exception.Message
+            $exportResults += $result
+        }
+    } else {
+        Write-Log "" -Level INFO
+        Write-Log "→ Exportación HTML omitida (no habilitada)" -Level INFO
+    }
+    
+    # EXPORTAR A MARKDOWN
+    Write-Log "" -Level INFO
+    Write-Log "→ Exportando a formato Markdown..." -Level INFO
+    try {
+        $mdFile = Export-ToMarkdown -Data $exportData
+        
+        if ($mdFile) {
+            $result = [ExportResult]::new("Markdown", $mdFile, $true)
+            $exportResults += $result
+            $generatedFiles += $mdFile
+            Write-Log "  ✓ Exportación Markdown exitosa: $mdFile" -Level SUCCESS
+        } else {
+            $result = [ExportResult]::new("Markdown", "", $false)
+            $result.ErrorMessage = "No se pudo generar el archivo Markdown"
+            $exportResults += $result
+            Write-Log "  ✗ Error en exportación Markdown" -Level ERROR
+        }
+    } catch {
+        Write-Log "  ✗ Error crítico en exportación Markdown: $_" -Level ERROR
+        $result = [ExportResult]::new("Markdown", "", $false)
+        $result.ErrorMessage = $_.Exception.Message
+        $exportResults += $result
+    }
+    
+    # Calcular estadísticas
+    $successCount = ($exportResults | Where-Object { $_.Success -eq $true }).Count
+    $totalFormats = $exportResults.Count
+    
+    Write-Log "" -Level INFO
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    Write-Log "FASE 3 COMPLETADA" -Level SUCCESS
+    Write-Log "Exportaciones exitosas: $successCount de $totalFormats" -Level INFO
+    Write-Log "═══════════════════════════════════════════" -Level INFO
+    
+    # Retornar resultados
+    return @{
+        Results = $exportResults
+        Files = $generatedFiles
+        SuccessCount = $successCount
+        TotalFormats = $totalFormats
+    }
+}
+
+<#
+.SYNOPSIS
+    Exporta datos a formato CSV
+#>
+function Export-ToCSV {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Data
+    )
+    
+    try {
+        # Verificar carpeta Fase3
+        if (-not (Test-Path -Path $Data.PhaseFolders.Fase3)) {
+            New-Item -ItemType Directory -Path $Data.PhaseFolders.Fase3 -Force | Out-Null
+        }
+        
+        $fileName = "$($Data.ComputerName)_$($Data.Timestamp)_system_report.csv"
+        $filePath = Join-Path -Path $Data.PhaseFolders.Fase3 -ChildPath $fileName
+        
+        # Preparar datos para CSV (formato plano)
+        $csvData = @()
+        
+        # Información del sistema
+        if ($Data.SystemInfo) {
+            $sysInfo = $Data.SystemInfo
+            $csvData += [PSCustomObject]@{
+                Categoria = "Sistema"
+                Propiedad = "Nombre del equipo"
+                Valor = if ($sysInfo.ComputerName) { $sysInfo.ComputerName } else { Get-DefaultValue -PropertyName 'ComputerName' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Sistema"
+                Propiedad = "Sistema Operativo"
+                Valor = if ($sysInfo.OSName) { $sysInfo.OSName } else { if ($sysInfo.SistemaOperativo) { $sysInfo.SistemaOperativo } else { Get-DefaultValue -PropertyName 'OSName' } }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Sistema"
+                Propiedad = "Versión"
+                Valor = if ($sysInfo.OSVersion) { $sysInfo.OSVersion } else { Get-DefaultValue -PropertyName 'OSVersion' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Sistema"
+                Propiedad = "Arquitectura"
+                Valor = if ($sysInfo.Architecture) { $sysInfo.Architecture } else { Get-DefaultValue -PropertyName 'Architecture' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Hardware"
+                Propiedad = "Fabricante"
+                Valor = if ($sysInfo.Manufacturer) { $sysInfo.Manufacturer } else { Get-DefaultValue -PropertyName 'Manufacturer' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Hardware"
+                Propiedad = "Modelo"
+                Valor = if ($sysInfo.Model) { $sysInfo.Model } else { Get-DefaultValue -PropertyName 'Model' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Hardware"
+                Propiedad = "Procesador"
+                Valor = if ($sysInfo.ProcessorName) { $sysInfo.ProcessorName } else { Get-DefaultValue -PropertyName 'ProcessorName' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Hardware"
+                Propiedad = "Núcleos"
+                Valor = if ($sysInfo.ProcessorCores) { $sysInfo.ProcessorCores.ToString() } else { "0" }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Hardware"
+                Propiedad = "RAM Total (GB)"
+                Valor = if ($sysInfo.TotalRAMGB) { $sysInfo.TotalRAMGB.ToString() } else { "0" }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Sistema"
+                Propiedad = "Tiempo de actividad (días)"
+                Valor = if ($sysInfo.UptimeDays) { $sysInfo.UptimeDays.ToString() } else { "0" }
+            }
+        }
+        
+        # Información de discos
+        if ($Data.Disks -and $Data.Disks.Count -gt 0) {
+            foreach ($disk in $Data.Disks) {
+                $driveLetter = if ($disk.DriveLetter) { $disk.DriveLetter } else { "N/A" }
+                
+                $csvData += [PSCustomObject]@{
+                    Categoria = "Disco $driveLetter"
+                    Propiedad = "Etiqueta"
+                    Valor = if ($disk.Label) { $disk.Label } else { Get-DefaultValue -PropertyName 'Label' }
+                }
+                $csvData += [PSCustomObject]@{
+                    Categoria = "Disco $driveLetter"
+                    Propiedad = "Sistema de archivos"
+                    Valor = if ($disk.FileSystem) { $disk.FileSystem } else { Get-DefaultValue -PropertyName 'FileSystem' }
+                }
+                $csvData += [PSCustomObject]@{
+                    Categoria = "Disco $driveLetter"
+                    Propiedad = "Tamaño total (GB)"
+                    Valor = if ($disk.TotalSizeGB) { $disk.TotalSizeGB.ToString() } else { if ($disk.SizeGB) { $disk.SizeGB.ToString() } else { "0" } }
+                }
+                $csvData += [PSCustomObject]@{
+                    Categoria = "Disco $driveLetter"
+                    Propiedad = "Espacio libre (GB)"
+                    Valor = if ($disk.FreeSpaceGB) { $disk.FreeSpaceGB.ToString() } else { "0" }
+                }
+                $csvData += [PSCustomObject]@{
+                    Categoria = "Disco $driveLetter"
+                    Propiedad = "% Libre"
+                    Valor = if ($disk.PercentFree) { $disk.PercentFree.ToString() } else { "0" }
+                }
+                $csvData += [PSCustomObject]@{
+                    Categoria = "Disco $driveLetter"
+                    Propiedad = "Estado de salud"
+                    Valor = if ($disk.HealthStatus) { $disk.HealthStatus } else { Get-DefaultValue -PropertyName 'HealthStatus' }
+                }
+            }
+        }
+        
+        # Información de red
+        if ($Data.NetworkInfo) {
+            $netInfo = $Data.NetworkInfo
+            
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Interfaz"
+                Valor = if ($netInfo.InterfaceName) { $netInfo.InterfaceName } else { "N/A" }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Dirección IP"
+                Valor = if ($netInfo.IPAddress) { $netInfo.IPAddress } else { Get-DefaultValue -PropertyName 'IPAddress' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Máscara de subred"
+                Valor = if ($netInfo.SubnetMask) { $netInfo.SubnetMask } else { "N/A" }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Puerta de enlace"
+                Valor = if ($netInfo.DefaultGateway) { $netInfo.DefaultGateway } else { "N/A" }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Servidores DNS"
+                Valor = if ($netInfo.DNSServers) { $netInfo.DNSServers } else { "N/A" }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Dirección MAC"
+                Valor = if ($netInfo.MACAddress) { $netInfo.MACAddress } else { Get-DefaultValue -PropertyName 'MACAddress' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Estado"
+                Valor = if ($netInfo.Status) { $netInfo.Status } else { Get-DefaultValue -PropertyName 'Status' }
+            }
+            $csvData += [PSCustomObject]@{
+                Categoria = "Red"
+                Propiedad = "Velocidad (Mbps)"
+                Valor = if ($netInfo.SpeedMbps) { $netInfo.SpeedMbps.ToString() } else { "0" }
+            }
+        }
+        
+        # Exportar a CSV
+        $csvData | Export-Csv -Path $filePath -NoTypeInformation -Encoding UTF8 -Force
+        
+        return $filePath
+        
+    } catch {
+        Write-Log "Error en Export-ToCSV: $_" -Level ERROR
+        return $null
+    }
+}
+
+<#
+.SYNOPSIS
+    Exporta datos a formato JSON
+#>
+function Export-ToJSON {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Data
+    )
+    
+    try {
+        # Verificar carpeta Fase3
+        if (-not (Test-Path -Path $Data.PhaseFolders.Fase3)) {
+            New-Item -ItemType Directory -Path $Data.PhaseFolders.Fase3 -Force | Out-Null
+        }
+        
+        $fileName = "$($Data.ComputerName)_$($Data.Timestamp)_system_report.json"
+        $filePath = Join-Path -Path $Data.PhaseFolders.Fase3 -ChildPath $fileName
+        
+        # Preparar datos con valores por defecto
+        $jsonData = @{
+            GeneratedDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            ComputerName = $Data.ComputerName
+            SystemInfo = if ($Data.SystemInfo) { $Data.SystemInfo } else { @{} }
+            Disks = if ($Data.Disks) { $Data.Disks } else { @() }
+            NetworkInfo = if ($Data.NetworkInfo) { $Data.NetworkInfo } else { @{} }
+        }
+        
+        # Exportar a JSON
+        $jsonData | ConvertTo-Json -Depth 5 | Out-File -FilePath $filePath -Encoding UTF8 -Force
+        
+        return $filePath
+        
+    } catch {
+        Write-Log "Error en Export-ToJSON: $_" -Level ERROR
+        return $null
+    }
+}
+
+<#
+.SYNOPSIS
+    Exporta datos a formato HTML (solo si está habilitado)
+#>
+function Export-ToHTML {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Data
+    )
+    
+    try {
+        # Verificar carpeta Fase3
+        if (-not (Test-Path -Path $Data.PhaseFolders.Fase3)) {
+            New-Item -ItemType Directory -Path $Data.PhaseFolders.Fase3 -Force | Out-Null
+        }
+        
+        $fileName = "$($Data.ComputerName)_$($Data.Timestamp)_system_report.html"
+        $filePath = Join-Path -Path $Data.PhaseFolders.Fase3 -ChildPath $fileName
+        
+        # CSS embebido
+        $css = @"
+<style>
+    body { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        margin: 20px; 
+        background-color: #f5f5f5; 
+    }
+    h1 { 
+        color: #2c3e50; 
+        border-bottom: 3px solid #3498db; 
+        padding-bottom: 10px; 
+    }
+    h2 { 
+        color: #34495e; 
+        margin-top: 30px; 
+        border-left: 4px solid #3498db; 
+        padding-left: 10px; 
+    }
+    table { 
+        border-collapse: collapse; 
+        width: 100%; 
+        margin: 20px 0; 
+        background-color: white; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+    }
+    th { 
+        background-color: #3498db; 
+        color: white; 
+        text-align: left; 
+        padding: 12px; 
+        font-weight: bold; 
+    }
+    td { 
+        border: 1px solid #ddd; 
+        padding: 10px; 
+    }
+    tr:nth-child(even) { 
+        background-color: #f9f9f9; 
+    }
+    tr:hover { 
+        background-color: #e8f4f8; 
+    }
+    .header-info { 
+        background-color: #ecf0f1; 
+        padding: 15px; 
+        border-radius: 5px; 
+        margin-bottom: 20px; 
+    }
+    .status-healthy { 
+        color: #27ae60; 
+        font-weight: bold; 
+    }
+    .status-warning { 
+        color: #f39c12; 
+        font-weight: bold; 
+    }
+    .status-critical { 
+        color: #e74c3c; 
+        font-weight: bold; 
+    }
+</style>
+"@
+        
+        # Construir HTML
+        $html = @"
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Auditoría - $($Data.ComputerName)</title>
+    $css
+</head>
+<body>
+    <h1>📊 Reporte de Auditoría del Sistema</h1>
+    
+    <div class="header-info">
+        <strong>Equipo:</strong> $($Data.ComputerName)<br>
+        <strong>Fecha de generación:</strong> $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")<br>
+        <strong>Timestamp:</strong> $($Data.Timestamp)
+    </div>
+    
+    <h2>💻 Información del Sistema</h2>
+    <table>
+        <tr>
+            <th>Propiedad</th>
+            <th>Valor</th>
+        </tr>
+"@
+        
+        # Información del sistema
+        if ($Data.SystemInfo) {
+            $sysInfo = $Data.SystemInfo
+            $html += "<tr><td>Nombre del equipo</td><td>$(if ($sysInfo.ComputerName) { $sysInfo.ComputerName } else { Get-DefaultValue -PropertyName 'ComputerName' })</td></tr>"
+            $html += "<tr><td>Sistema Operativo</td><td>$(if ($sysInfo.OSName) { $sysInfo.OSName } else { if ($sysInfo.SistemaOperativo) { $sysInfo.SistemaOperativo } else { Get-DefaultValue -PropertyName 'OSName' } })</td></tr>"
+            $html += "<tr><td>Versión</td><td>$(if ($sysInfo.OSVersion) { $sysInfo.OSVersion } else { Get-DefaultValue -PropertyName 'OSVersion' })</td></tr>"
+            $html += "<tr><td>Arquitectura</td><td>$(if ($sysInfo.Architecture) { $sysInfo.Architecture } else { Get-DefaultValue -PropertyName 'Architecture' })</td></tr>"
+            $html += "<tr><td>Fabricante</td><td>$(if ($sysInfo.Manufacturer) { $sysInfo.Manufacturer } else { Get-DefaultValue -PropertyName 'Manufacturer' })</td></tr>"
+            $html += "<tr><td>Modelo</td><td>$(if ($sysInfo.Model) { $sysInfo.Model } else { Get-DefaultValue -PropertyName 'Model' })</td></tr>"
+            $html += "<tr><td>Procesador</td><td>$(if ($sysInfo.ProcessorName) { $sysInfo.ProcessorName } else { Get-DefaultValue -PropertyName 'ProcessorName' })</td></tr>"
+            $html += "<tr><td>Núcleos del procesador</td><td>$(if ($sysInfo.ProcessorCores) { $sysInfo.ProcessorCores } else { '0' })</td></tr>"
+            $html += "<tr><td>RAM Total (GB)</td><td>$(if ($sysInfo.TotalRAMGB) { $sysInfo.TotalRAMGB } else { '0' })</td></tr>"
+            $html += "<tr><td>Tiempo de actividad (días)</td><td>$(if ($sysInfo.UptimeDays) { $sysInfo.UptimeDays } else { '0' })</td></tr>"
+        }
+        
+        $html += @"
+    </table>
+    
+    <h2>💾 Información de Discos</h2>
+    <table>
+        <tr>
+            <th>Unidad</th>
+            <th>Etiqueta</th>
+            <th>Sistema de archivos</th>
+            <th>Tamaño (GB)</th>
+            <th>Libre (GB)</th>
+            <th>% Libre</th>
+            <th>Estado</th>
+        </tr>
+"@
+        
+        # Información de discos
+        if ($Data.Disks -and $Data.Disks.Count -gt 0) {
+            foreach ($disk in $Data.Disks) {
+                $healthClass = if ($disk.HealthStatus -eq "Saludable") { "status-healthy" } elseif ($disk.HealthStatus -eq "Advertencia") { "status-warning" } else { "status-critical" }
+                
+                $html += "<tr>"
+                $html += "<td>$(if ($disk.DriveLetter) { $disk.DriveLetter } else { 'N/A' })</td>"
+                $html += "<td>$(if ($disk.Label) { $disk.Label } else { Get-DefaultValue -PropertyName 'Label' })</td>"
+                $html += "<td>$(if ($disk.FileSystem) { $disk.FileSystem } else { Get-DefaultValue -PropertyName 'FileSystem' })</td>"
+                $html += "<td>$(if ($disk.TotalSizeGB) { $disk.TotalSizeGB } else { if ($disk.SizeGB) { $disk.SizeGB } else { '0' } })</td>"
+                $html += "<td>$(if ($disk.FreeSpaceGB) { $disk.FreeSpaceGB } else { '0' })</td>"
+                $html += "<td>$(if ($disk.PercentFree) { $disk.PercentFree } else { '0' })%</td>"
+                $html += "<td class='$healthClass'>$(if ($disk.HealthStatus) { $disk.HealthStatus } else { Get-DefaultValue -PropertyName 'HealthStatus' })</td>"
+                $html += "</tr>"
+            }
+        } else {
+            $html += "<tr><td colspan='7'>No hay información de discos disponible</td></tr>"
+        }
+        
+        $html += @"
+    </table>
+    
+    <h2>🌐 Información de Red</h2>
+    <table>
+        <tr>
+            <th>Propiedad</th>
+            <th>Valor</th>
+        </tr>
+"@
+        
+        # Información de red
+        if ($Data.NetworkInfo) {
+            $netInfo = $Data.NetworkInfo
+            $html += "<tr><td>Interfaz</td><td>$(if ($netInfo.InterfaceName) { $netInfo.InterfaceName } else { 'N/A' })</td></tr>"
+            $html += "<tr><td>Dirección IP</td><td>$(if ($netInfo.IPAddress) { $netInfo.IPAddress } else { Get-DefaultValue -PropertyName 'IPAddress' })</td></tr>"
+            $html += "<tr><td>Máscara de subred</td><td>$(if ($netInfo.SubnetMask) { $netInfo.SubnetMask } else { 'N/A' })</td></tr>"
+            $html += "<tr><td>Puerta de enlace</td><td>$(if ($netInfo.DefaultGateway) { $netInfo.DefaultGateway } else { 'N/A' })</td></tr>"
+            $html += "<tr><td>Servidores DNS</td><td>$(if ($netInfo.DNSServers) { $netInfo.DNSServers } else { 'N/A' })</td></tr>"
+            $html += "<tr><td>Dirección MAC</td><td>$(if ($netInfo.MACAddress) { $netInfo.MACAddress } else { Get-DefaultValue -PropertyName 'MACAddress' })</td></tr>"
+            $html += "<tr><td>Estado</td><td>$(if ($netInfo.Status) { $netInfo.Status } else { Get-DefaultValue -PropertyName 'Status' })</td></tr>"
+            $html += "<tr><td>Velocidad (Mbps)</td><td>$(if ($netInfo.SpeedMbps) { $netInfo.SpeedMbps } else { '0' })</td></tr>"
+            $html += "<tr><td>DHCP habilitado</td><td>$(if ($netInfo.DHCPEnabled) { $netInfo.DHCPEnabled } else { 'False' })</td></tr>"
+        }
+        
+        $html += @"
+    </table>
+    
+    <div class="header-info" style="margin-top: 40px;">
+        <strong>Reporte generado por:</strong> Script de Auditoría v3.2<br>
+        <strong>Hora de generación:</strong> $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+    </div>
+</body>
+</html>
+"@
+        
+        # Guardar HTML
+        $html | Out-File -FilePath $filePath -Encoding UTF8 -Force
+        
+        return $filePath
+        
+    } catch {
+        Write-Log "Error en Export-ToHTML: $_" -Level ERROR
+        return $null
+    }
+}
+
+<#
+.SYNOPSIS
+    Exporta datos a formato Markdown
+#>
+function Export-ToMarkdown {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Data
+    )
+    
+    try {
+        # Verificar carpeta Fase3
+        if (-not (Test-Path -Path $Data.PhaseFolders.Fase3)) {
+            New-Item -ItemType Directory -Path $Data.PhaseFolders.Fase3 -Force | Out-Null
+        }
+        
+        $fileName = "$($Data.ComputerName)_$($Data.Timestamp)_system_report.md"
+        $filePath = Join-Path -Path $Data.PhaseFolders.Fase3 -ChildPath $fileName
+        
+        # Construir
+        Markdown
+        $markdown = @"
+
+            📊 Reporte de Auditoría del Sistema
+            Equipo: ((
+            (Data.ComputerName)
+
+            Fecha de generación: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            Timestamp: ((
+            (Data.Timestamp)
+
+
+            💻 Información del Sistema
+            PropiedadValor"@
+
+  # Información del sistema
+    if ($Data.SystemInfo) {
+        $sysInfo = $Data.SystemInfo
+        $markdown += "| Nombre del equipo | $(if ($sysInfo.ComputerName) { $sysInfo.ComputerName } else { Get-DefaultValue -PropertyName 'ComputerName' }) |`n"
+        $markdown += "| Sistema Operativo | $(if ($sysInfo.OSName) { $sysInfo.OSName } else { if ($sysInfo.SistemaOperativo) { $sysInfo.SistemaOperativo } else { Get-DefaultValue -PropertyName 'OSName' } }) |`n"
+        $markdown += "| Versión | $(if ($sysInfo.OSVersion) { $sysInfo.OSVersion } else { Get-DefaultValue -PropertyName 'OSVersion' }) |`n"
+        $markdown += "| Arquitectura | $(if ($sysInfo.Architecture) { $sysInfo.Architecture } else { Get-DefaultValue -PropertyName 'Architecture' }) |`n"
+        $markdown += "| Fabricante | $(if ($sysInfo.Manufacturer) { $sysInfo.Manufacturer } else { Get-DefaultValue -PropertyName 'Manufacturer' }) |`n"
+        $markdown += "| Modelo | $(if ($sysInfo.Model) { $sysInfo.Model } else { Get-DefaultValue -PropertyName 'Model' }) |`n"
+        $markdown += "| Procesador | $(if ($sysInfo.ProcessorName) { $sysInfo.ProcessorName } else { Get-DefaultValue -PropertyName 'ProcessorName' }) |`n"
+        $markdown += "| Núcleos del procesador | $(if ($sysInfo.ProcessorCores) { $sysInfo.ProcessorCores } else { '0' }) |`n"
+        $markdown += "| RAM Total (GB) | $(if ($sysInfo.TotalRAMGB) { $sysInfo.TotalRAMGB } else { '0' }) |`n"
+        $markdown += "| Tiempo de actividad (días) | $(if ($sysInfo.UptimeDays) { $sysInfo.UptimeDays } else { '0' }) |`n"
+    }
+    
+    $markdown += @"
+
+💾 Información de Discos
+UnidadEtiquetaSistema de archivosTamaño (GB)Libre (GB)% LibreEstado"@
+    # Información de discos
+    if ($Data.Disks -and $Data.Disks.Count -gt 0) {
+        foreach ($disk in $Data.Disks) {
+            $driveLetter = if ($disk.DriveLetter) { $disk.DriveLetter } else { "N/A" }
+            $label = if ($disk.Label) { $disk.Label } else { Get-DefaultValue -PropertyName 'Label' }
+            $fileSystem = if ($disk.FileSystem) { $disk.FileSystem } else { Get-DefaultValue -PropertyName 'FileSystem' }
+            $totalSize = if ($disk.TotalSizeGB) { $disk.TotalSizeGB } else { if ($disk.SizeGB) { $disk.SizeGB } else { '0' } }
+            $freeSpace = if ($disk.FreeSpaceGB) { $disk.FreeSpaceGB } else { '0' }
+            $percentFree = if ($disk.PercentFree) { $disk.PercentFree } else { '0' }
+            $healthStatus = if ($disk.HealthStatus) { $disk.HealthStatus } else { Get-DefaultValue -PropertyName 'HealthStatus' }
+            
+            $markdown += "| $driveLetter | $label | $fileSystem | $totalSize | $freeSpace | $percentFree% | $healthStatus |`n"
+        }
+    } else {
+        $markdown += "| - | No hay información de discos disponible | - | - | - | - | - |`n"
+    }
+    
+    $markdown += @"
+
+🌐 Información de Red
+PropiedadValor"@
+    # Información de red
+    if ($Data.NetworkInfo) {
+        $netInfo = $Data.NetworkInfo
+        $markdown += "| Interfaz | $(if ($netInfo.InterfaceName) { $netInfo.InterfaceName } else { 'N/A' }) |`n"
+        $markdown += "| Dirección IP | $(if ($netInfo.IPAddress) { $netInfo.IPAddress } else { Get-DefaultValue -PropertyName 'IPAddress' }) |`n"
+        $markdown += "| Máscara de subred | $(if ($netInfo.SubnetMask) { $netInfo.SubnetMask } else { 'N/A' }) |`n"
+        $markdown += "| Puerta de enlace | $(if ($netInfo.DefaultGateway) { $netInfo.DefaultGateway } else { 'N/A' }) |`n"
+        $markdown += "| Servidores DNS | $(if ($netInfo.DNSServers) { $netInfo.DNSServers } else { 'N/A' }) |`n"
+        $markdown += "| Dirección MAC | $(if ($netInfo.MACAddress) { $netInfo.MACAddress } else { Get-DefaultValue -PropertyName 'MACAddress' }) |`n"
+        $markdown += "| Estado | $(if ($netInfo.Status) { $netInfo.Status } else { Get-DefaultValue -PropertyName 'Status' }) |`n"
+        $markdown += "| Velocidad (Mbps) | $(if ($netInfo.SpeedMbps) { $netInfo.SpeedMbps } else { '0' }) |`n"
+        $markdown += "| DHCP habilitado | $(if ($netInfo.DHCPEnabled) { $netInfo.DHCPEnabled } else { 'False' }) |`n"
+    }
+    
+    $markdown += @"
+
+📋 Recomendaciones
+"@
+    # Generar recomendaciones basadas en datos
+    $recommendations = @()
+    
+    # Recomendaciones basadas en discos
+    if ($Data.Disks -and $Data.Disks.Count -gt 0) {
+        foreach ($disk in $Data.Disks) {
+            $percentFree = if ($disk.PercentFree) { $disk.PercentFree } else { 0 }
+            $driveLetter = if ($disk.DriveLetter) { $disk.DriveLetter } else { "N/A" }
+            
+            if ($percentFree -lt 10) {
+                $recommendations += "⚠️ **CRÍTICO:** El disco $driveLetter tiene menos del 10% de espacio libre. Se recomienda liberar espacio inmediatamente."
+            } elseif ($percentFree -lt 20) {
+                $recommendations += "⚡ **ADVERTENCIA:** El disco $driveLetter tiene menos del 20% de espacio libre. Considere liberar espacio pronto."
+            }
+        }
+    }
+    
+    # Recomendaciones basadas en RAM
+    if ($Data.SystemInfo -and $Data.SystemInfo.TotalRAMGB) {
+        if ($Data.SystemInfo.TotalRAMGB -lt 8) {
+            $recommendations += "💡 **INFO:** El sistema tiene menos de 8 GB de RAM. Considere ampliar la memoria para mejor rendimiento."
+        }
+    }
+    
+    # Recomendaciones basadas en uptime
+    if ($Data.SystemInfo -and $Data.SystemInfo.UptimeDays) {
+        if ($Data.SystemInfo.UptimeDays -gt 30) {
+            $recommendations += "🔄 **INFO:** El sistema lleva más de 30 días sin reiniciarse. Se recomienda reiniciar periódicamente para aplicar actualizaciones."
+        }
+    }
+    
+    if ($recommendations.Count -gt 0) {
+        foreach ($rec in $recommendations) {
+            $markdown += "$rec`n`n"
+        }
+    } else {
+        $markdown += "✅ No se encontraron problemas que requieran atención inmediata.`n`n"
+    }
+    
+    $markdown += @"
+
+Reporte generado por: Script de Auditoría v3.2
+Hora de generación: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+"@
+    # Guardar Markdown
+    $markdown | Out-File -FilePath $filePath -Encoding UTF8 -Force
+    
+    return $filePath
+    
+} catch {
+    Write-Log "Error en Export-ToMarkdown: $_" -Level ERROR
+    return $null
+}
+}
+#endregion
+
+#region SCRIPT PRINCIPAL Y EJECUCIÓN
+
+# Encabezado principal con versión y configuración
+Clear-Host
+Write-Host ""
+Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "         AUDITORÍA DE SISTEMA WINDOWS - VERSIÓN 3.2        " -ForegroundColor Cyan
+Write-Host "              EXPORTACIÓN MULTIFORMATO                     " -ForegroundColor Cyan
+Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Iniciando auditoría completa del sistema..." -ForegroundColor White
+Write-Host "Equipo: $computerName" -ForegroundColor Yellow
+Write-Host "Ruta de salida: $auditPath" -ForegroundColor Yellow
+Write-Host "Exportar HTML: $ExportHTML" -ForegroundColor Yellow
+Write-Host ""
+
+Write-Log "═══════════════════════════════════════════════════════════" -Level INFO
+Write-Log "INICIO DE AUDITORÍA - VERSIÓN 3.2" -Level INFO
+Write-Log "Equipo: $computerName" -Level INFO
+Write-Log "Usuario: $env:USERNAME" -Level INFO
+Write-Log "Ruta: $auditPath" -Level INFO
+Write-Log "═══════════════════════════════════════════════════════════" -Level INFO
+
+# Variables para pasar datos entre fases
+$script:fase1Result = $null
+$script:fase2Result = $null
+$script:fase3Result = $null
+
+# Definición de fases con sus funciones
+$phases = @(
+    @{
+        Number = 1
+        Name = "Configuración Básica"
+        Description = "Recolectando información básica del sistema"
+        Function = {
+            try {
+                Write-Host ""
+                Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+                Write-Host "  FASE 1: Configuración Básica" -ForegroundColor Cyan
+                Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+                Write-Host ""
+                
+                $script:fase1Result = Invoke-Fase1 -ComputerName $computerName -Timestamp $timestamp -PhaseFolders $phaseFolders
+                
+                if ($script:fase1Result) {
+                    Write-Host ""
+                    Write-Host "✓ FASE 1 COMPLETADA EXITOSAMENTE" -ForegroundColor Green
+                    Write-Host ""
+                    return $true
+                } else {
+                    Write-Host ""
+                    Write-Host "✗ FASE 1 FALLÓ" -ForegroundColor Red
+                    Write-Host ""
+                    return $false
+                }
+            } catch {
+                Write-Log "Error crítico en Fase 1: $_" -Level ERROR
+                return $false
+            }
+        }
+    },
+    @{
+        Number = 2
+        Name = "Recolección Detallada"
+        Description = "Obteniendo información detallada del sistema"
+        Function = {
+            try {
+                if (-not $script:fase1Result) {
+                    Write-Log "No se puede ejecutar Fase 2 sin resultados de Fase 1" -Level ERROR
+                    return $false
+                }
+                
+                Write-Host ""
+                Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+                Write-Host "  FASE 2: Recolección Detallada" -ForegroundColor Cyan
+                Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+                Write-Host ""
+                
+                # Usar splatting para pasar parámetros
+                $script:fase2Result = Invoke-Fase2 @fase1Result
+                
+                if ($script:fase2Result) {
+                    Write-Host ""
+                    Write-Host "✓ FASE 2 COMPLETADA EXITOSAMENTE" -ForegroundColor Green
+                    Write-Host ""
+                    return $true
+                } else {
+                    Write-Host ""
+                    Write-Host "✗ FASE 2 FALLÓ" -ForegroundColor Red
+                    Write-Host ""
+                    return $false
+                }
+            } catch {
+                Write-Log "Error crítico en Fase 2: $_" -Level ERROR
+                return $false
+            }
+        }
+    },
+    @{
+        Number = 3
+        Name = "Exportación Multiformato"
+        Description = "Generando reportes en múltiples formatos"
+        Function = {
+            try {
+                if (-not $script:fase2Result) {
+                    Write-Log "No se puede ejecutar Fase 3 sin resultados de Fase 2" -Level ERROR
+                    return $false
+                }
+                
+                Write-Host ""
+                Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+                Write-Host "  FASE 3: Exportación Multiformato" -ForegroundColor Cyan
+                Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+                Write-Host ""
+                
+                # Usar splatting y agregar ExportHTML
+                $script:fase3Result = Invoke-Fase3 @fase2Result -ExportHTML:$ExportHTML
+                
+                if ($script:fase3Result) {
+                    Write-Host ""
+                    Write-Host "✓ FASE 3 COMPLETADA EXITOSAMENTE" -ForegroundColor Green
+                    Write-Host ""
+                    return $true
+                } else {
+                    Write-Host ""
+                    Write-Host "✗ FASE 3 FALLÓ" -ForegroundColor Red
+                    Write-Host ""
+                    return $false
+                }
+            } catch {
+                Write-Log "Error crítico en Fase 3: $_" -Level ERROR
+                return $false
+            }
+        }
+    }
+)
+
+# Try-catch global para manejo de errores críticos
+try {
+    # Ejecutar cada fase secuencialmente
+    $phaseResults = @()
+    $allPhasesSuccessful = $true
+    
+    foreach ($phase in $phases) {
+        Write-Log "Iniciando Fase $($phase.Number): $($phase.Name)" -Level INFO
+        
+        # Ejecutar la función de la fase
+        $success = & $phase.Function
+        
+        # Registrar resultado
+        $phaseResults += @{
+            Number = $phase.Number
+            Name = $phase.Name
+            Success = $success
+        }
+        
+        if (-not $success) {
+            $allPhasesSuccessful = $false
+            Write-Log "Fase $($phase.Number) falló. Continuando con las siguientes fases..." -Level WARNING
+        }
+        
+        # Pausa breve entre fases
+        Start-Sleep -Milliseconds 500
+    }
+    
+    # Resumen final mejorado
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "                  RESUMEN DE AUDITORÍA                     " -ForegroundColor Cyan
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Mostrar estado de cada fase
+    Write-Host "ESTADO DE LAS FASES:" -ForegroundColor Yellow
+    Write-Host "--------------------" -ForegroundColor Yellow
+    foreach ($result in $phaseResults) {
+        $status = if ($result.Success) { "✓ COMPLETADA" } else { "✗ FALLÓ" }
+        $color = if ($result.Success) { "Green" } else { "Red" }
+        Write-Host "  Fase $($result.Number) - $($result.Name): $status" -ForegroundColor $color
+    }
+    Write-Host ""
+    
+    # Mostrar archivos generados si Fase 3 fue exitosa
+    if ($script:fase3Result -and $script:fase3Result.Files) {
+        Write-Host "📁 ARCHIVOS GENERADOS (FASE 3):" -ForegroundColor Yellow
+        Write-Host "--------------------------------" -ForegroundColor Yellow
+        
+        foreach ($file in $script:fase3Result.Files) {
+            if (Test-Path -Path $file) {
+                $fileInfo = Get-Item -Path $file
+                $fileName = $fileInfo.Name
+                $fileSize = if ($fileInfo.Length -lt 1KB) {
+                    "$($fileInfo.Length) bytes"
+                } elseif ($fileInfo.Length -lt 1MB) {
+                    "$([math]::Round($fileInfo.Length / 1KB, 2)) KB"
+                } else {
+                    "$([math]::Round($fileInfo.Length / 1MB, 2)) MB"
+                }
+                
+                Write-Host "  • $fileName ($fileSize)" -ForegroundColor Green
+            }
+        }
+        Write-Host ""
+    }
+    
+    # Estadísticas de exportación
+    if ($script:fase3Result) {
+        Write-Host "ESTADÍSTICAS DE EXPORTACIÓN:" -ForegroundColor Yellow
+        Write-Host "----------------------------" -ForegroundColor Yellow
+        Write-Host "  Formatos exportados exitosamente: $($script:fase3Result.SuccessCount) de $($script:fase3Result.TotalFormats)" -ForegroundColor White
+        Write-Host ""
+    }
+    
+    # Mostrar estructura de carpetas
+    Write-Host "ESTRUCTURA DE CARPETAS:" -ForegroundColor Yellow
+    Write-Host "-----------------------" -ForegroundColor Yellow
+    Write-Host "  Carpeta principal: $auditPath" -ForegroundColor White
+    
+    foreach ($faseKey in $phaseFolders.Keys | Sort-Object) {
+        $fasePath = $phaseFolders[$faseKey]
+        if (Test-Path -Path $fasePath) {
+            $fileCount = (Get-ChildItem -Path $fasePath -File).Count
+            Write-Host "  └─ $faseKey`: $fasePath ($fileCount archivos)" -ForegroundColor White
+        }
+    }
+    Write-Host ""
+    
+    # Tiempo total de ejecución
+    $executionTime = (Get-Date) - $global:StartTime
+    $executionMinutes = [math]::Round($executionTime.TotalMinutes, 2)
+    $executionSeconds = [math]::Round($executionTime.TotalSeconds, 2)
+    
+    Write-Host "TIEMPO DE EJECUCIÓN:" -ForegroundColor Yellow
+    Write-Host "--------------------" -ForegroundColor Yellow
+    Write-Host "  Tiempo total: $executionSeconds segundos ($executionMinutes minutos)" -ForegroundColor White
+    Write-Host ""
+    
+    # Contador de errores y advertencias
+    Write-Host "CONTADORES:" -ForegroundColor Yellow
+    Write-Host "-----------" -ForegroundColor Yellow
+    Write-Host "  Errores: $($global:ErrorCount)" -ForegroundColor $(if ($global:ErrorCount -eq 0) { "Green" } else { "Red" })
+    Write-Host "  Advertencias: $($global:WarningCount)" -ForegroundColor $(if ($global:WarningCount -eq 0) { "Green" } else { "Yellow" })
+    Write-Host ""
+    
+    # Mensaje final
+    if ($allPhasesSuccessful) {
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+        Write-Host "         ✅ AUDITORÍA COMPLETADA CORRECTAMENTE             " -ForegroundColor Green
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+        Write-Log "AUDITORÍA COMPLETADA EXITOSAMENTE" -Level SUCCESS
+    } else {
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+        Write-Host "    ⚠️  AUDITORÍA COMPLETADA CON ADVERTENCIAS             " -ForegroundColor Yellow
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+        Write-Log "AUDITORÍA COMPLETADA CON ADVERTENCIAS" -Level WARNING
+    }
+    
+    Write-Host ""
+    Write-Host "Archivo de log: $global:LogFile" -ForegroundColor Cyan
+    Write-Host "Ruta de resultados: $auditPath" -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Logging final
+    Write-Log "═══════════════════════════════════════════════════════════" -Level INFO
+    Write-Log "FIN DE AUDITORÍA" -Level INFO
+    Write-Log "Tiempo de ejecución: $executionSeconds segundos" -Level INFO
+    Write-Log "Errores: $($global:ErrorCount) | Advertencias: $($global:WarningCount)" -Level INFO
+    Write-Log "═══════════════════════════════════════════════════════════" -Level INFO
+    
+} catch {
+    # Manejo de errores críticos
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
+    Write-Host "           ❌ ERROR CRÍTICO EN LA AUDITORÍA                " -ForegroundColor Red
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Error: $_" -ForegroundColor Red
+    Write-Host "Ubicación: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+    Write-Host ""
+    
+    Write-Log "ERROR CRÍTICO EN EJECUCIÓN: $_" -Level ERROR
+    Write-Log "Línea: $($_.InvocationInfo.ScriptLineNumber)" -Level ERROR
+    Write-Log "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
+    
+    $global:ErrorCount++
+}
+
+# Cierre elegante con espera
+Write-Host ""
+Write-Host "Presione cualquier tecla para salir o espere 10 segundos..." -ForegroundColor Gray
+
+# Intentar esperar por tecla, con timeout de 10 segundos
+$timeout = 10
+$startTime = Get-Date
+
+while (((Get-Date) - $startTime).TotalSeconds -lt $timeout) {
+    if ([Console]::KeyAvailable) {
+        $null = [Console]::ReadKey($true)
+        break
+    }
+    Start-Sleep -Milliseconds 100
+}
+
+Write-Host "Saliendo del script..." -ForegroundColor Gray
+Write-Log "Script finalizado por el usuario o timeout" -Level INFO
+
+#endregion
+
+# FIN DEL SCRIPT
