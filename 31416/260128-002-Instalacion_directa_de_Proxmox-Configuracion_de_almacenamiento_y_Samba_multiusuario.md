@@ -26,7 +26,7 @@ Este procedimiento documenta la instalación directa de Proxmox VE 9.0 sobre har
 - Se descarga la ISO oficial de Proxmox VE 9.0 desde [proxmox.com](https://www.proxmox.com).
 - Se realiza instalación directa sobre el SSD principal (`sdc`, Samsung EVO 250GB).
 - Se configura red estática y acceso SSH.
-- Se accede a la interfaz web en `https://192.168.1.76:8006`.
+- Se accede a la interfaz web en `https://192.168.1.100:8006`.
 
 ---
 
@@ -40,7 +40,7 @@ Este procedimiento documenta la instalación directa de Proxmox VE 9.0 sobre har
 | sdb   | ST4000VN006 IronWolf     | 4 TB   | ZFS mirror   |
 | sdd   | ST4000VN006 IronWolf     | 4 TB   | ext4 + ZFS   |
 | sdc   | Samsung SSD 860 EVO      | 250 GB | Sistema base |
-| sdi   | SanDisk USB              | 57 GB  | Externo      |
+| sdi   | SanDisk USB              | 57 GB  | Externo ISOs  |
 
 ### Creación de pools ZFS:
 
@@ -315,7 +315,7 @@ Proxmox Storage	Integración completa en interfaz web
 | Elemento | Valor |
 |---------|-------|
 | Hostname | `pve` |
-| IP estática | `192.168.1.76` |
+| IP estática | `192.168.1.100` |
 | Proxmox VE | 9.0.3 |
 | Kernel | 6.14.8-2-pve |
 | Pools ZFS | `nas` (mirror), `backup` (single) |
