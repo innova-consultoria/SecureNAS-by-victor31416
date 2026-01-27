@@ -1,5 +1,5 @@
-Documentación: Instalación y Configuración de Debian 13 como Servidor
-📋 Tabla de Contenidos
+## Instalación y Configuración de Debian 13 como Servidor
+## 📋 Tabla de Contenidos
 
     Preparación e Instalación
 
@@ -13,7 +13,7 @@ Documentación: Instalación y Configuración de Debian 13 como Servidor
 
     Notas Importantes
 
-🚀 Preparación e Instalación
+##🚀 Preparación e Instalación
 Preparación del Medio de Instalación
 
 Para la instalación de Debian 13 se utilizó un USB preparado con Ventoy, una herramienta que permite arrancar múltiples imágenes ISO desde un mismo dispositivo USB.
@@ -78,7 +78,7 @@ Durante la instalación se seleccionaron únicamente:
 
     Para actualizaciones: se configuró usar el servidor FTP de España
 
-💻 Configuración Inicial desde la Terminal Local
+## 💻 Configuración Inicial desde la Terminal Local
 Primer Acceso al Sistema
 
 Una vez completada la instalación y reiniciado el sistema, se accedió directamente a la terminal del servidor.
@@ -148,7 +148,7 @@ Información obtenida:
 
     Máscara de red: /24 (255.255.255.0)
 
-🔐 Acceso por SSH y Configuración como Root
+## 🔐 Acceso por SSH y Configuración como Root
 Conexión SSH desde otro Equipo
 
 Desde un equipo en la misma red local, se estableció la conexión SSH:
@@ -177,7 +177,8 @@ su root
 Password: [contraseña de root]
 
 Nota importante: Todos los comandos de configuración posteriores se ejecutaron desde esta sesión SSH como usuario root.
-🌐 Configuración de IP Estática
+
+##🌐 Configuración de IP Estática
 Fase 1: Preparación y Backup
 Verificación del Estado Actual de Red
 
@@ -331,7 +332,7 @@ systemctl restart networking
 # Esperar unos segundos para que se estabilice la configuración
 sleep 5
 
-✅ Verificación y Pruebas Finales
+## ✅ Verificación y Pruebas Finales
 Verificación de Configuración Aplicada
 Comprobar Configuración IP
 bash
@@ -397,7 +398,7 @@ echo "IP de Rescate: 192.168.1.77"
 echo "Usuario SSH: victor31416"
 echo "Comando: ssh victor31416@192.168.1.76"
 
-📝 Notas Importantes
+## 📝 Notas Importantes
 Resumen del Proceso Realizado
 Paso	Acción	Método	Estado
 1	Instalación del sistema	USB Ventoy (modo gráfico)	✅ Completado
