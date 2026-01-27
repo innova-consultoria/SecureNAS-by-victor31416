@@ -1,7 +1,6 @@
 # 001 - Instalación y Configuración de Debian 13 como Servidor - Actualización del Sistema - SSH e IP estática.
 
 ## 📋 Tabla de Contenidos
-
 1. [🚀 Preparación e Instalación](#-preparación-e-instalación)
 2. [💻 Configuración Inicial desde la Terminal Local](#-configuración-inicial-desde-la-terminal-local)
 3. [🔐 Acceso por SSH y Configuración como Root](#-acceso-por-ssh-y-configuración-como-root)
@@ -9,89 +8,159 @@
 5. [✅ Verificación y Pruebas Finales](#-verificación-y-pruebas-finales)
 6. [📝 Notas Importantes](#-notas-importantes)
 
+---
+
 ## 🚀 Preparación e Instalación
-Preparación del Medio de Instalación
 
-Para la instalación de Debian 13 se utilizó un USB preparado con Ventoy, una herramienta que permite arrancar múltiples imágenes ISO desde un mismo dispositivo USB.
+### Preparación del Medio de Instalación
+Para la instalación de Debian 13 se utilizó un USB preparado con **Ventoy**, una herramienta que permite arrancar múltiples imágenes ISO desde un mismo dispositivo USB.
 
-Proceso de preparación del USB:
+**Proceso de preparación del USB:**
+1. Descargar e instalar Ventoy en el USB
+2. Copiar la imagen ISO de Debian 13 en el USB
+3. Arrancar el servidor desde el USB
+4. Seleccionar "Instalación gráfica" del menú de Ventoy
 
-    Descargar e instalar Ventoy en el USB
+### Configuración Durante la Instalación
 
-    Copiar la imagen ISO de Debian 13 en el USB
+#### 1. Configuración Regional
+| Parámetro | Valor Configurado | Notas |
+|-----------|-------------------|-------|
+| Idioma | Español | |
+| País | España | |
+| Zona horaria | Madrid | |
 
-    Arrancar el servidor desde el USB
+#### 2. Configuración de Red
+- **Nombre de host:** `pve` (introducido manualmente)
+- **Nombre de dominio:** (dejado en blanco)
 
-    Seleccionar "Instalación gráfica" del menú de Ventoy
+#### 3. Usuarios y Contraseñas
+| Usuario | Configuración |
+|---------|---------------|
+| **root** | Contraseña establecida durante la instalación |
+| **Usuario normal** | Nombre completo: Victor 3,1416<br>Nombre de usuario: victor31416<br>Contraseña: establecida durante instalación |
 
-Configuración Durante la Instalación
-1. Configuración Regional
-Parámetro	Valor Configurado	Notas
-Idioma	Español	
-País	España	
-Zona horaria	Madrid	
-2. Configuración de Red
+#### 4. Particionado del Disco
+**Disco:** Samsung SSD de 250GB  
+**Configuración:** Particionado automático sin LVM
 
-    Nombre de host: pve (introducido manualmente)
+- Método seleccionado: "Particionado guiado - usar disco completo"
+- Esquema: "Todos los archivos en una partición"
+- **Importante:** Opción LVM NO marcada
+- Confirmación de cambios en el disco
 
-    Nombre de dominio: (dejado en blanco)
-
-3. Usuarios y Contraseñas
-Usuario	Configuración
-root	Contraseña establecida durante la instalación
-Usuario normal	Nombre completo: Victor 3,1416
-Nombre de usuario: victor31416
-Contraseña: establecida durante instalación
-4. Particionado del Disco
-
-Disco: Samsung SSD de 250GB
-Configuración: Particionado automático sin LVM
-
-    Método seleccionado: "Particionado guiado - usar disco completo"
-
-    Esquema: "Todos los archivos en una partición"
-
-    Importante: Opción LVM NO marcada
-
-    Confirmación de cambios en el disco
-
-5. Selección de Paquetes
-
+#### 5. Selección de Paquetes
 Durante la instalación se seleccionaron únicamente:
+- ❌ Entorno de escritorio Debian (Deseleccionar)
+- ✅ Servidor SSH (para acceso remoto)
+- ✅ Utilidades del sistema estándar (herramientas básicas)
 
-    ❌ Entorno de escritorio Debian (Deseleccionar)
-    
-    ✅ Servidor SSH (para acceso remoto)
+#### 6. Configuraciones Finales
+- No apareció la opción de instalar GRUB (posiblemente omitida o automática)
+- Se seleccionó NO participar en las estadísticas de paquetes
+- Para actualizaciones: se configuró usar el servidor FTP de España
 
-    ✅ Utilidades del sistema estándar (herramientas básicas)
+✅ Principales Cambios Aplicados:
 
+    Sintaxis Correcta para Tablas: Cada tabla ahora tiene su línea de cabecera (|---|) y cada fila está en una nueva línea, lo que GitHub puede interpretar.
 
-6. Configuraciones Finales
+    Encabezados Jerárquicos: Los apartados usan ### para subsecciones, creando una jerarquía clara.
 
-    No apareció la opción de instalar GRUB (posiblemente omitida o automática)
+    Listas Formateadas: Los procesos y listas con viñetas usan la sintaxis 1. o -.
 
-    Se seleccionó NO participar en las estadísticas de paquetes
+    Código en Línea: Elementos como pve están entre acentos graves para resaltarlos.
 
-    Para actualizaciones: se configuró usar el servidor FTP de España
+    Enlaces Internos Funcionales: La tabla de contenidos usa el formato #-texto-en-minúsculas para enlazar correctamente a secciones que empiezan con emojis.
+
+Para aplicar esto a todo tu documento, necesitarás hacer las mismas correcciones en las siguientes secciones, especialmente en las tablas de "Herramientas instaladas" y "Resumen del Proceso Realizado".
+
+¿Te gustaría que te prepare de la misma manera la siguiente sección ("💻 Configuración Inicial desde la Terminal Local") para que puedas ir actualizando el archivo por partes?
+prepara todo el documento teniendo en cuenta que solo se debe copiar los códigos o scripts que pueden ser utilizados o han sido utilizados en el proceso documentado
+
+Aquí tienes el documento completo corregido con formato Markdown listo para copiar y pegar en GitHub:
+markdown
+
+# 001 - Instalación y Configuración de Debian 13 como Servidor - Actualización del Sistema - SSH e IP estática
+
+## 📋 Tabla de Contenidos
+1. [🚀 Preparación e Instalación](#-preparación-e-instalación)
+2. [💻 Configuración Inicial desde la Terminal Local](#-configuración-inicial-desde-la-terminal-local)
+3. [🔐 Acceso por SSH y Configuración como Root](#-acceso-por-ssh-y-configuración-como-root)
+4. [🌐 Configuración de IP Estática](#-configuración-de-ip-estática)
+5. [✅ Verificación y Pruebas Finales](#-verificación-y-pruebas-finales)
+6. [📝 Notas Importantes](#-notas-importantes)
+
+---
+
+## 🚀 Preparación e Instalación
+
+### Preparación del Medio de Instalación
+Para la instalación de Debian 13 se utilizó un USB preparado con **Ventoy**, una herramienta que permite arrancar múltiples imágenes ISO desde un mismo dispositivo USB.
+
+**Proceso de preparación del USB:**
+1. Descargar e instalar Ventoy en el USB
+2. Copiar la imagen ISO de Debian 13 en el USB
+3. Arrancar el servidor desde el USB
+4. Seleccionar "Instalación gráfica" del menú de Ventoy
+
+### Configuración Durante la Instalación
+
+#### 1. Configuración Regional
+| Parámetro | Valor Configurado | Notas |
+|-----------|-------------------|-------|
+| Idioma | Español | |
+| País | España | |
+| Zona horaria | Madrid | |
+
+#### 2. Configuración de Red
+- **Nombre de host:** `pve` (introducido manualmente)
+- **Nombre de dominio:** (dejado en blanco)
+
+#### 3. Usuarios y Contraseñas
+| Usuario | Configuración |
+|---------|---------------|
+| **root** | Contraseña establecida durante la instalación |
+| **Usuario normal** | Nombre completo: Victor 3,1416<br>Nombre de usuario: victor31416<br>Contraseña: establecida durante instalación |
+
+#### 4. Particionado del Disco
+**Disco:** Samsung SSD de 250GB  
+**Configuración:** Particionado automático sin LVM
+
+- Método seleccionado: "Particionado guiado - usar disco completo"
+- Esquema: "Todos los archivos en una partición"
+- **Importante:** Opción LVM NO marcada
+- Confirmación de cambios en el disco
+
+#### 5. Selección de Paquetes
+Durante la instalación se seleccionaron únicamente:
+- ❌ Entorno de escritorio Debian (Deseleccionar)
+- ✅ Servidor SSH (para acceso remoto)
+- ✅ Utilidades del sistema estándar (herramientas básicas)
+
+#### 6. Configuraciones Finales
+- No apareció la opción de instalar GRUB (posiblemente omitida o automática)
+- Se seleccionó NO participar en las estadísticas de paquetes
+- Para actualizaciones: se configuró usar el servidor FTP de España
+
+---
 
 ## 💻 Configuración Inicial desde la Terminal Local
-Primer Acceso al Sistema
 
+### Primer Acceso al Sistema
 Una vez completada la instalación y reiniciado el sistema, se accedió directamente a la terminal del servidor.
 
-Login inicial:
-text
+**Login inicial:**
 
 Login: root
 Password: [contraseña establecida durante instalación]
+text
 
-Actualización del Sistema
 
+### Actualización del Sistema
 Es fundamental actualizar el sistema inmediatamente después de la instalación para obtener las últimas correcciones de seguridad y actualizaciones de paquetes.
 
-Comandos ejecutados:
-bash
-
+**Comandos ejecutados:**
+```bash
 # Actualizar lista de paquetes disponibles
 apt update
 
@@ -107,19 +176,16 @@ bash
 apt install -y vim nano curl wget htop net-tools tmux screen git
 
 Herramientas instaladas:
-
-| Paquete | Propósito | Uso Común |
-|---------|-----------|-----------|
-| **vim** | Editor de texto avanzado y modal | `vim archivo.conf` - Editar archivos de configuración |
-| **nano** | Editor de texto simple e intuitivo | `nano /etc/network/interfaces` - Edición rápida |
-| **curl** | Cliente para transferencia de datos URL | `curl -I https://google.com` - Ver encabezados HTTP |
-| **wget** | Herramienta para descargar archivos web | `wget https://ejemplo.com/archivo.tar.gz` - Descargas |
-| **htop** | Monitor de procesos interactivo | `htop` - Ver procesos, CPU, memoria en tiempo real |
-| **net-tools** | Utilidades clásicas de red | `ifconfig`, `netstat`, `route` - Diagnóstico de red |
-| **tmux** | Multiplexor de terminales | `tmux new -s sesion1` - Múltiples terminales en una |
-| **screen** | Alternativa a tmux para sesiones persistentes | `screen -S backup` - Mantener procesos tras desconexión |
-| **git** | Sistema de control de versiones | `git clone https://github.com/usuario/repo.git` |
-
+Paquete	Propósito	Uso Común
+vim	Editor de texto avanzado y modal	vim archivo.conf - Editar archivos de configuración
+nano	Editor de texto simple e intuitivo	nano /etc/network/interfaces - Edición rápida
+curl	Cliente para transferencia de datos URL	curl -I https://google.com - Ver encabezados HTTP
+wget	Herramienta para descargar archivos web	wget https://ejemplo.com/archivo.tar.gz - Descargas
+htop	Monitor de procesos interactivo	htop - Ver procesos, CPU, memoria en tiempo real
+net-tools	Utilidades clásicas de red	ifconfig, netstat, route - Diagnóstico de red
+tmux	Multiplexor de terminales	tmux new -s sesion1 - Múltiples terminales en una
+screen	Alternativa a tmux para sesiones persistentes	screen -S backup - Mantener procesos tras desconexión
+git	Sistema de control de versiones	git clone https://github.com/usuario/repo.git
 Activación del Servicio SSH
 
 Para permitir el acceso remoto al servidor, se habilitó el servicio SSH:
@@ -150,7 +216,7 @@ Información obtenida:
 
     Máscara de red: /24 (255.255.255.0)
 
-## 🔐 Acceso por SSH y Configuración como Root
+🔐 Acceso por SSH y Configuración como Root
 Conexión SSH desde otro Equipo
 
 Desde un equipo en la misma red local, se estableció la conexión SSH:
@@ -179,8 +245,7 @@ su root
 Password: [contraseña de root]
 
 Nota importante: Todos los comandos de configuración posteriores se ejecutaron desde esta sesión SSH como usuario root.
-
-##🌐 Configuración de IP Estática
+🌐 Configuración de IP Estática
 Fase 1: Preparación y Backup
 Verificación del Estado Actual de Red
 
@@ -334,7 +399,7 @@ systemctl restart networking
 # Esperar unos segundos para que se estabilice la configuración
 sleep 5
 
-## ✅ Verificación y Pruebas Finales
+✅ Verificación y Pruebas Finales
 Verificación de Configuración Aplicada
 Comprobar Configuración IP
 bash
@@ -400,7 +465,7 @@ echo "IP de Rescate: 192.168.1.77"
 echo "Usuario SSH: victor31416"
 echo "Comando: ssh victor31416@192.168.1.76"
 
-## 📝 Notas Importantes
+📝 Notas Importantes
 Resumen del Proceso Realizado
 Paso	Acción	Método	Estado
 1	Instalación del sistema	USB Ventoy (modo gráfico)	✅ Completado
@@ -438,8 +503,6 @@ Errores Comunes Evitados:
     ❌ No asumir que funciona - Todas las pruebas ejecutadas
 
 Comandos de Rescate (en caso de problemas)
-
-Si en algún momento se pierde la conexión por SSH, se puede recuperar el acceso:
 
 Opción 1: Usar la IP de rescate
 bash
