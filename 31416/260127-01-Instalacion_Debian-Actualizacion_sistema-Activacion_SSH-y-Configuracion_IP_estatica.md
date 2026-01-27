@@ -2,12 +2,12 @@
 
 ## 📋 Tabla de Contenidos
 
-1. [Preparación e Instalación](#preparación-e-instalación)
-2. [Configuración Inicial desde la Terminal Local](#configuración-inicial-desde-la-terminal-local)
-3. [Acceso por SSH y Configuración como Root](#acceso-por-ssh-y-configuración-como-root)
-4. [Configuración de IP Estática](#configuración-de-ip-estática)
-5. [Verificación y Pruebas Finales](#verificación-y-pruebas-finales)
-6. [Notas Importantes](#notas-importantes)
+1. [🚀 Preparación e Instalación](#-preparación-e-instalación)
+2. [💻 Configuración Inicial desde la Terminal Local](#-configuración-inicial-desde-la-terminal-local)
+3. [🔐 Acceso por SSH y Configuración como Root](#-acceso-por-ssh-y-configuración-como-root)
+4. [🌐 Configuración de IP Estática](#-configuración-de-ip-estática)
+5. [✅ Verificación y Pruebas Finales](#-verificación-y-pruebas-finales)
+6. [📝 Notas Importantes](#-notas-importantes)
 
 ## 🚀 Preparación e Instalación
 Preparación del Medio de Instalación
