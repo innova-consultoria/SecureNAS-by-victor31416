@@ -68,8 +68,10 @@ Durante la instalación se seleccionaron únicamente:
 Una vez completada la instalación y reiniciado el sistema, se accedió directamente a la terminal del servidor.
 
 **Login inicial:**
+```bash
+root
+```
 
-Login: root
 Password: [contraseña establecida durante instalación]
 
 ### Actualización del Sistema
@@ -156,7 +158,7 @@ Dentro de la sesión SSH, se cambió al usuario root para realizar configuracion
 su root
 ``````
 
-# Introducir la contraseña de root
+### Introducir la contraseña de root
 Password: [contraseña de root]
 
 
