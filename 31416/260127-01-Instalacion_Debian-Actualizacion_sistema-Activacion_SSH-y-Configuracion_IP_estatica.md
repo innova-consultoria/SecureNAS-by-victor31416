@@ -38,7 +38,7 @@ Para la instalación de Debian 13 se utilizó un USB preparado con **Ventoy**, u
 | Usuario | Configuración |
 |---------|---------------|
 | **root** | Contraseña establecida durante la instalación |
-| **Usuario normal** | Nombre completo: Victor 3,1416<br>Nombre de usuario: victor31416<br>Contraseña: establecida durante instalación |
+| **Usuario normal** | Nombre completo: Victor 3,1416<br>Nombre de usuario: victor<br>Contraseña: establecida durante instalación |
 
 #### 4. Particionado del Disco
 **Disco:** Samsung SSD de 250GB  
@@ -68,10 +68,9 @@ Durante la instalación se seleccionaron únicamente:
 Una vez completada la instalación y reiniciado el sistema, se accedió directamente a la terminal del servidor.
 
 **Login inicial:**
-```
+
 Login: root
 Password: [contraseña establecida durante instalación]
-```
 
 ### Actualización del Sistema
 Es fundamental actualizar el sistema inmediatamente después de la instalación para obtener las últimas correcciones de seguridad y actualizaciones de paquetes.
@@ -131,7 +130,7 @@ ip addr show
 
 **Información obtenida:**
 - Interfaz principal: `enp1s0`
-- IP asignada por DHCP: `192.168.1.76`
+- IP asignada por DHCP: `192.168.1.100`
 - Máscara de red: `/24` (255.255.255.0)
 
 ## 🔐 Acceso por SSH y Configuración como Root
@@ -141,12 +140,12 @@ Desde un equipo en la misma red local, se estableció la conexión SSH:
 
 ```bash
 # Comando ejecutado en el equipo cliente
-ssh victor31416@192.168.1.76
+ssh victor@192.168.1.100
 ```
 
 **Proceso de conexión:**
 1. Primera conexión: aceptar la huella digital del servidor
-2. Introducir la contraseña del usuario `victor31416`
+2. Introducir la contraseña del usuario `victor`
 3. Conexión establecida exitosamente
 
 ### Cambio a Usuario Root
@@ -155,10 +154,11 @@ Dentro de la sesión SSH, se cambió al usuario root para realizar configuracion
 ```bash
 # Cambiar a usuario root
 su root
+``````
 
 # Introducir la contraseña de root
 Password: [contraseña de root]
-```
+
 
 **Nota importante:** Todos los comandos de configuración posteriores se ejecutaron desde esta sesión SSH como usuario root.
 
@@ -185,7 +185,7 @@ cat /etc/resolv.conf
 
 **Información recopilada:**
 - Interfaz activa: `enp1s0`
-- IP actual: `192.168.1.76/24` (dinámica, DHCP)
+- IP actual: `192.168.1.100/24` (dinámica, DHCP)
 - Gateway: `192.168.1.1`
 - DNS: Configurado por DHCP
 
@@ -194,7 +194,7 @@ Para evitar perder acceso al servidor durante la configuración, se añadió una
 
 ```bash
 # Agregar IP secundaria en la misma red
-ip addr add 192.168.1.77/24 dev enp1s0 label enp1s0:rescue
+ip addr add 192.168.1.101/24 dev enp1s0 label enp1s0:rescue
 
 # Verificar que la IP se agregó correctamente
 ip addr show enp1s0
@@ -217,14 +217,14 @@ echo "=== PRUEBA CONFIGURACIÓN IP ESTÁTICA ==="
 ip addr flush dev enp1s0
 
 # Configurar IP estática
-ip addr add 192.168.1.76/24 dev enp1s0
+ip addr add 192.168.1.100/24 dev enp1s0
 ip route add default via 192.168.1.1
 
-# Configurar DNS temporal
+# Configurar DNS temporal con Movistar y Cloudflare
 echo "nameserver 80.58.61.250" > /etc/resolv.conf
 echo "nameserver 1.1.1.1" >> /etc/resolv.conf
 
-# Probar conectividad
+# Probar conectividad con ping a Router y Google
 echo "Probando conectividad..."
 ping -c 3 192.168.1.1
 ping -c 3 8.8.8.8
@@ -266,7 +266,7 @@ iface lo inet loopback
 # Primary network interface - STATIC
 auto enp1s0
 iface enp1s0 inet static
-    address 192.168.1.76
+    address 192.168.1.100
     netmask 255.255.255.0
     gateway 192.168.1.1
     dns-nameservers 80.58.61.250 1.1.1.1
@@ -355,7 +355,7 @@ ping -c 2 192.168.1.1 && echo "✓ Gateway accesible"
 
 #### Prueba de Conexión a Internet
 ```bash
-# Probar conexión a un servidor público
+# Probar conexión a un servidor público de Google
 ping -c 2 8.8.8.8 && echo "✓ Internet accesible"
 ```
 
@@ -379,10 +379,10 @@ ps aux | grep -i dhc | grep -v grep
 ```bash
 echo "=== INFORMACIÓN DE CONEXIÓN ==="
 echo "Hostname: $(hostname)"
-echo "IP Principal: 192.168.1.76"
-echo "IP de Rescate: 192.168.1.77"
-echo "Usuario SSH: victor31416"
-echo "Comando: ssh victor31416@192.168.1.76"
+echo "IP Principal: 192.168.1.100"
+echo "IP de Rescate: 192.168.1.101"
+echo "Usuario SSH: victor"
+echo "Comando: ssh victor@192.168.1.100"
 ```
 
 ## 📝 Notas Importantes
@@ -400,7 +400,7 @@ echo "Comando: ssh victor31416@192.168.1.76"
 ### Lo que SÍ se hizo correctamente:
 - ✅ Instalación gráfica de Debian 13 - Completa y sin errores
 - ✅ Configuración de hostname - Establecido como `pve`
-- ✅ Creación de usuarios - `root` y `victor31416` (Victor 3,1416)
+- ✅ Creación de usuarios - `root` y `victor` (Victor 3,1416)
 - ✅ Particionado - Automático sin LVM
 - ✅ Selección de paquetes - Solo servidor SSH y utilidades
 - ✅ Activación SSH - Inmediatamente después de instalación
@@ -417,7 +417,7 @@ echo "Comando: ssh victor31416@192.168.1.76"
 
 **Opción 1: Usar la IP de rescate**
 ```bash
-ssh victor31416@192.168.1.77
+ssh victor31416@192.168.1.101
 ```
 
 **Opción 2: Restaurar configuración anterior**
@@ -432,19 +432,18 @@ systemctl restart networking
 |-----------|-------------------|
 | Sistema Operativo | Debian 13 (Bookworm) |
 | Hostname | `pve` |
-| Usuario principal | `victor31416` |
-| IP Estática | `192.168.1.76/24` |
-| IP de Rescate | `192.168.1.77/24` |
+| Usuario principal | `victor` |
+| IP Estática | `192.168.1.100/24` |
+| IP de Rescate | `192.168.1.101/24` |
 | Gateway | `192.168.1.1` |
 | DNS Primario | `80.58.61.250` |
 | DNS Secundario | `1.1.1.1` |
 | Servicio SSH | Activado y funcionando |
 
 ---
-
 **Documentación creada por:** Victor 3,1416  
-**Fecha de creación:** $(date +%d/%m/%Y)  
-**Última actualización:** $(date +%d/%m/%Y %H:%M)  
+**Fecha de creación:** 27/01/2026  
+**Última actualización:** 27/01/2026 11:30  
 **Sistema:** Debian 13 (Bookworm)  
 **Estado:** ✅ Configuración completada y verificada  
 
