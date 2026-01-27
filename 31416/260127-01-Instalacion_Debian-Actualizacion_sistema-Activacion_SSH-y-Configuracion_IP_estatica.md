@@ -389,7 +389,7 @@ echo "Comando: ssh victor@192.168.1.100"
 
 ### Comando para apagar el sistema correctamente
 
-**Apagado limpio gestionando init con systemctl sin mensajes de error
+Apagado limpio gestionando init con systemctl sin mensajes de error
 ```bash
 systemctl poweroff
 ```
