@@ -394,6 +394,10 @@ Apagado limpio gestionando init con systemctl sin mensajes de error
 systemctl poweroff
 ```
 
+
+---
+
+
 ## 📝 Notas Importantes
 
 ### Resumen del Proceso Realizado
