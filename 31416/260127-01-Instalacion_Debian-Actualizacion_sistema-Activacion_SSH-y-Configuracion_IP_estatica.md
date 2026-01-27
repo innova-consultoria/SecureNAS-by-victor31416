@@ -1,19 +1,15 @@
-## Instalación y Configuración de Debian 13 como Servidor
+# 001 - Instalación y Configuración de Debian 13 como Servidor - Actualización del Sistema - SSH e IP estática.
+
 ## 📋 Tabla de Contenidos
 
-    Preparación e Instalación
+1. [Preparación e Instalación](#preparación-e-instalación)
+2. [Configuración Inicial desde la Terminal Local](#configuración-inicial-desde-la-terminal-local)
+3. [Acceso por SSH y Configuración como Root](#acceso-por-ssh-y-configuración-como-root)
+4. [Configuración de IP Estática](#configuración-de-ip-estática)
+5. [Verificación y Pruebas Finales](#verificación-y-pruebas-finales)
+6. [Notas Importantes](#notas-importantes)
 
-    Configuración Inicial desde la Terminal Local
-
-    Acceso por SSH y Configuración como Root
-
-    Configuración de IP Estática
-
-    Verificación y Pruebas Finales
-
-    Notas Importantes
-
-##🚀 Preparación e Instalación
+## 🚀 Preparación e Instalación
 Preparación del Medio de Instalación
 
 Para la instalación de Debian 13 se utilizó un USB preparado con Ventoy, una herramienta que permite arrancar múltiples imágenes ISO desde un mismo dispositivo USB.
