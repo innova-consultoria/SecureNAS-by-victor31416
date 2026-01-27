@@ -126,7 +126,7 @@ chmod 775 /mnt/samba1tb/comun
 ```
 Configuración en smb.conf:
 ini
-
+```bash
 [comun]
    path = /mnt/samba1tb/comun
    browseable = yes
@@ -169,7 +169,7 @@ ini
    valid users = admin
    force user = admin
    force group = admin
-
+```
 Reinicio de servicios:
 bash
 ```bash
