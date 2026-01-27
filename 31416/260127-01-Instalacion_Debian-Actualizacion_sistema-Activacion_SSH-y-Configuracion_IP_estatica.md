@@ -68,12 +68,10 @@ Durante la instalación se seleccionaron únicamente:
 Una vez completada la instalación y reiniciado el sistema, se accedió directamente a la terminal del servidor.
 
 **Login inicial:**
-
-
+```
 Login: root
 Password: [contraseña establecida durante instalación]
-text
-
+```
 
 ### Actualización del Sistema
 Es fundamental actualizar el sistema inmediatamente después de la instalación para obtener las últimas correcciones de seguridad y actualizaciones de paquetes.
@@ -85,31 +83,34 @@ apt update
 
 # Actualizar todos los paquetes instalados
 apt upgrade -y
+```
 
-Instalación de Herramientas Básicas
-
+### Instalación de Herramientas Básicas
 Se instalaron herramientas esenciales para la administración del sistema:
-bash
 
+```bash
 # Instalar editores, herramientas de red y utilidades de sistema
 apt install -y vim nano curl wget htop net-tools tmux screen git
+```
 
-Herramientas instaladas:
-Paquete	Propósito	Uso Común
-vim	Editor de texto avanzado y modal	vim archivo.conf - Editar archivos de configuración
-nano	Editor de texto simple e intuitivo	nano /etc/network/interfaces - Edición rápida
-curl	Cliente para transferencia de datos URL	curl -I https://google.com - Ver encabezados HTTP
-wget	Herramienta para descargar archivos web	wget https://ejemplo.com/archivo.tar.gz - Descargas
-htop	Monitor de procesos interactivo	htop - Ver procesos, CPU, memoria en tiempo real
-net-tools	Utilidades clásicas de red	ifconfig, netstat, route - Diagnóstico de red
-tmux	Multiplexor de terminales	tmux new -s sesion1 - Múltiples terminales en una
-screen	Alternativa a tmux para sesiones persistentes	screen -S backup - Mantener procesos tras desconexión
-git	Sistema de control de versiones	git clone https://github.com/usuario/repo.git
-Activación del Servicio SSH
+**Herramientas instaladas:**
 
+| Paquete | Propósito | Uso Común |
+|---------|-----------|-----------|
+| **vim** | Editor de texto avanzado y modal | `vim archivo.conf` - Editar archivos de configuración |
+| **nano** | Editor de texto simple e intuitivo | `nano /etc/network/interfaces` - Edición rápida |
+| **curl** | Cliente para transferencia de datos URL | `curl -I https://google.com` - Ver encabezados HTTP |
+| **wget** | Herramienta para descargar archivos web | `wget https://ejemplo.com/archivo.tar.gz` - Descargas |
+| **htop** | Monitor de procesos interactivo | `htop` - Ver procesos, CPU, memoria en tiempo real |
+| **net-tools** | Utilidades clásicas de red | `ifconfig`, `netstat`, `route` - Diagnóstico de red |
+| **tmux** | Multiplexor de terminales | `tmux new -s sesion1` - Múltiples terminales en una |
+| **screen** | Alternativa a tmux para sesiones persistentes | `screen -S backup` - Mantener procesos tras desconexión |
+| **git** | Sistema de control de versiones | `git clone https://github.com/usuario/repo.git` |
+
+### Activación del Servicio SSH
 Para permitir el acceso remoto al servidor, se habilitó el servicio SSH:
-bash
 
+```bash
 # Habilitar SSH para que se inicie automáticamente al arrancar
 systemctl enable ssh
 
@@ -118,59 +119,57 @@ systemctl start ssh
 
 # Verificar el estado del servicio
 systemctl status ssh
+```
 
-Identificación de la IP Asignada
-
+### Identificación de la IP Asignada
 Para poder conectarse remotamente, fue necesario identificar la IP que DHCP había asignado al servidor:
-bash
 
+```bash
 # Mostrar todas las interfaces de red y sus direcciones IP
 ip addr show
+```
 
-Información obtenida:
+**Información obtenida:**
+- Interfaz principal: `enp1s0`
+- IP asignada por DHCP: `192.168.1.76`
+- Máscara de red: `/24` (255.255.255.0)
 
-    Interfaz principal: enp1s0
+## 🔐 Acceso por SSH y Configuración como Root
 
-    IP asignada por DHCP: 192.168.1.76
-
-    Máscara de red: /24 (255.255.255.0)
-
-🔐 Acceso por SSH y Configuración como Root
-Conexión SSH desde otro Equipo
-
+### Conexión SSH desde otro Equipo
 Desde un equipo en la misma red local, se estableció la conexión SSH:
-bash
 
+```bash
 # Comando ejecutado en el equipo cliente
 ssh victor31416@192.168.1.76
+```
 
-Proceso de conexión:
+**Proceso de conexión:**
+1. Primera conexión: aceptar la huella digital del servidor
+2. Introducir la contraseña del usuario `victor31416`
+3. Conexión establecida exitosamente
 
-    Primera conexión: aceptar la huella digital del servidor
-
-    Introducir la contraseña del usuario victor31416
-
-    Conexión establecida exitosamente
-
-Cambio a Usuario Root
-
+### Cambio a Usuario Root
 Dentro de la sesión SSH, se cambió al usuario root para realizar configuraciones de sistema:
-bash
 
+```bash
 # Cambiar a usuario root
 su root
 
 # Introducir la contraseña de root
 Password: [contraseña de root]
+```
 
-Nota importante: Todos los comandos de configuración posteriores se ejecutaron desde esta sesión SSH como usuario root.
-🌐 Configuración de IP Estática
-Fase 1: Preparación y Backup
-Verificación del Estado Actual de Red
+**Nota importante:** Todos los comandos de configuración posteriores se ejecutaron desde esta sesión SSH como usuario root.
 
+## 🌐 Configuración de IP Estática
+
+### Fase 1: Preparación y Backup
+
+#### Verificación del Estado Actual de Red
 Antes de realizar cambios, se verificó la configuración actual de red:
-bash
 
+```bash
 # Mostrar todas las interfaces de red disponibles
 ip link show
 
@@ -182,35 +181,33 @@ ip route show
 
 # Ver la configuración DNS actual
 cat /etc/resolv.conf
+```
 
-Información recopilada:
+**Información recopilada:**
+- Interfaz activa: `enp1s0`
+- IP actual: `192.168.1.76/24` (dinámica, DHCP)
+- Gateway: `192.168.1.1`
+- DNS: Configurado por DHCP
 
-    Interfaz activa: enp1s0
-
-    IP actual: 192.168.1.76/24 (dinámica, DHCP)
-
-    Gateway: 192.168.1.1
-
-    DNS: Configurado por DHCP
-
-Configurar IP de Rescate
-
+#### Configurar IP de Rescate
 Para evitar perder acceso al servidor durante la configuración, se añadió una IP secundaria:
-bash
 
+```bash
 # Agregar IP secundaria en la misma red
 ip addr add 192.168.1.77/24 dev enp1s0 label enp1s0:rescue
 
 # Verificar que la IP se agregó correctamente
 ip addr show enp1s0
+```
 
-Propósito de la IP de rescate: Proporcionar un método alternativo de acceso en caso de que la configuración estática falle.
-Fase 2: Prueba de Configuración Estática
-Script de Prueba Temporal
+**Propósito de la IP de rescate:** Proporcionar un método alternativo de acceso en caso de que la configuración estática falle.
 
+### Fase 2: Prueba de Configuración Estática
+
+#### Script de Prueba Temporal
 Se creó un script para probar la configuración estática sin hacer cambios permanentes:
-bash
 
+```bash
 # Crear script de prueba
 cat > /tmp/network-test.sh << 'EOF'
 #!/bin/bash
@@ -239,25 +236,27 @@ chmod +x /tmp/network-test.sh
 
 # Ejecutar la prueba
 /tmp/network-test.sh
+```
 
-Resultado de la prueba: ✅ Todo funcionó correctamente, confirmando que la configuración estática era viable.
-Fase 3: Configuración Permanente
-Backup de Configuración Actual
+**Resultado de la prueba:** ✅ Todo funcionó correctamente, confirmando que la configuración estática era viable.
 
+### Fase 3: Configuración Permanente
+
+#### Backup de Configuración Actual
 Antes de modificar la configuración de red, se creó un backup:
-bash
 
+```bash
 # Crear backup con timestamp
 cp /etc/network/interfaces /etc/network/interfaces.backup.$(date +%Y%m%d_%H%M%S)
 
 # Confirmar creación del backup
 echo "Backup creado: /etc/network/interfaces.backup.*"
+```
 
-Crear Nueva Configuración Estática
-
+#### Crear Nueva Configuración Estática
 Se configuró la IP estática permanentemente en el archivo de configuración:
-bash
 
+```bash
 # Configurar IP estática permanente
 cat > /etc/network/interfaces << 'EOF'
 # Loopback interface
@@ -275,13 +274,14 @@ EOF
 
 # Verificar el contenido del archivo creado
 cat /etc/network/interfaces
+```
 
-Fase 4: Desactivación de DHCP
-Identificar y Detener Procesos DHCP
+### Fase 4: Desactivación de DHCP
 
+#### Identificar y Detener Procesos DHCP
 Para evitar conflictos, se identificaron y detuvieron los procesos DHCP:
-bash
 
+```bash
 # Buscar procesos DHCP activos en el sistema
 ps aux | grep -i dhc
 
@@ -290,12 +290,12 @@ if pgrep dhcpcd >/dev/null 2>&1; then
     echo "Deteniendo dhcpcd..."
     pkill dhcpcd
 fi
+```
 
-Configurar DNS Permanente
-
+#### Configurar DNS Permanente
 Se estableció una configuración DNS estática:
-bash
 
+```bash
 # Configurar DNS estático
 cat > /etc/resolv.conf << 'EOF'
 # Static DNS configuration
@@ -305,152 +305,147 @@ EOF
 
 # Verificar la configuración DNS
 cat /etc/resolv.conf
+```
 
-Fase 5: Aplicación de Cambios
-Aplicar Configuración Estática
+### Fase 5: Aplicación de Cambios
 
+#### Aplicar Configuración Estática
 Finalmente, se aplicaron los cambios reiniciando el servicio de red:
-bash
 
+```bash
 # Reiniciar servicio de red para aplicar cambios
 systemctl restart networking
 
 # Esperar unos segundos para que se estabilice la configuración
 sleep 5
+```
 
-✅ Verificación y Pruebas Finales
-Verificación de Configuración Aplicada
-Comprobar Configuración IP
-bash
+## ✅ Verificación y Pruebas Finales
 
+### Verificación de Configuración Aplicada
+
+#### Comprobar Configuración IP
+```bash
 echo "=== Verificando IP estática ==="
 ip addr show enp1s0
+```
 
-Indicadores de éxito:
+**Indicadores de éxito:**
+- ✅ Muestra `scope global enp1s0`
+- ✅ Muestra `valid_lft forever preferred_lft forever`
+- ❌ **NO** muestra tiempos de expiración como `valid_lft 86399sec`
 
-    ✅ Muestra scope global enp1s0
-
-    ✅ Muestra valid_lft forever preferred_lft forever
-
-    ❌ NO muestra tiempos de expiración como valid_lft 86399sec
-
-Comprobar Configuración de Rutas
-bash
-
+#### Comprobar Configuración de Rutas
+```bash
 echo "=== Verificando rutas ==="
 ip route show
+```
 
-Indicadores de éxito:
+**Indicadores de éxito:**
+- ✅ Muestra `default via 192.168.1.1 dev enp1s0`
+- ❌ **NO** muestra `proto dhcp` en las rutas
 
-    ✅ Muestra default via 192.168.1.1 dev enp1s0
+### Pruebas de Conectividad
 
-    ❌ NO muestra proto dhcp en las rutas
-
-Pruebas de Conectividad
-Prueba de Gateway Local
-bash
-
+#### Prueba de Gateway Local
+```bash
 # Probar conexión al gateway de red
 ping -c 2 192.168.1.1 && echo "✓ Gateway accesible"
+```
 
-Prueba de Conexión a Internet
-bash
-
+#### Prueba de Conexión a Internet
+```bash
 # Probar conexión a un servidor público
 ping -c 2 8.8.8.8 && echo "✓ Internet accesible"
+```
 
-Prueba de Resolución DNS
-bash
-
+#### Prueba de Resolución DNS
+```bash
 # Probar el funcionamiento del DNS
 nslookup google.com && echo "✓ DNS funcionando"
+```
 
-Verificación de Procesos DHCP
-
+### Verificación de Procesos DHCP
 Para asegurar que DHCP no interfiera con la configuración estática:
-bash
 
+```bash
 # Verificar que no hay procesos DHCP activos
 ps aux | grep -i dhc | grep -v grep
+```
 
-Resultado esperado: No debe mostrar ningún proceso DHCP activo.
-Información para Conexiones Futuras
-bash
+**Resultado esperado:** No debe mostrar ningún proceso DHCP activo.
 
+### Información para Conexiones Futuras
+```bash
 echo "=== INFORMACIÓN DE CONEXIÓN ==="
 echo "Hostname: $(hostname)"
 echo "IP Principal: 192.168.1.76"
 echo "IP de Rescate: 192.168.1.77"
 echo "Usuario SSH: victor31416"
 echo "Comando: ssh victor31416@192.168.1.76"
+```
 
-📝 Notas Importantes
-Resumen del Proceso Realizado
-Paso	Acción	Método	Estado
-1	Instalación del sistema	USB Ventoy (modo gráfico)	✅ Completado
-2	Configuración básica	Durante instalación	✅ Completado
-3	Activación de SSH	Terminal local	✅ Completado
-4	Conexión remota	SSH desde otro equipo	✅ Completado
-5	Configuración IP estática	Por SSH como root	✅ Completado
-6	Verificación final	Comandos SSH	✅ Completado
-Lo que SÍ se hizo correctamente:
+## 📝 Notas Importantes
 
-    ✅ Instalación gráfica de Debian 13 - Completa y sin errores
+### Resumen del Proceso Realizado
+| Paso | Acción | Método | Estado |
+|------|--------|--------|--------|
+| 1 | Instalación del sistema | USB Ventoy (modo gráfico) | ✅ Completado |
+| 2 | Configuración básica | Durante instalación | ✅ Completado |
+| 3 | Activación de SSH | Terminal local | ✅ Completado |
+| 4 | Conexión remota | SSH desde otro equipo | ✅ Completado |
+| 5 | Configuración IP estática | Por SSH como root | ✅ Completado |
+| 6 | Verificación final | Comandos SSH | ✅ Completado |
 
-    ✅ Configuración de hostname - Establecido como pve
+### Lo que SÍ se hizo correctamente:
+- ✅ Instalación gráfica de Debian 13 - Completa y sin errores
+- ✅ Configuración de hostname - Establecido como `pve`
+- ✅ Creación de usuarios - `root` y `victor31416` (Victor 3,1416)
+- ✅ Particionado - Automático sin LVM
+- ✅ Selección de paquetes - Solo servidor SSH y utilidades
+- ✅ Activación SSH - Inmediatamente después de instalación
+- ✅ Configuración de red - Realizada de forma segura por SSH
+- ✅ IP estática - Configurada y verificada correctamente
 
-    ✅ Creación de usuarios - root y victor31416 (Victor 3,1416)
+### Errores Comunes Evitados:
+- ❌ No perder acceso durante configuración - Se usó IP de rescate
+- ❌ No sobreescribir configuración sin backup - Backup creado
+- ❌ No ignorar procesos DHCP activos - Verificados y detenidos
+- ❌ No asumir que funciona - Todas las pruebas ejecutadas
 
-    ✅ Particionado - Automático sin LVM
+### Comandos de Rescate (en caso de problemas)
 
-    ✅ Selección de paquetes - Solo servidor SSH y utilidades
-
-    ✅ Activación SSH - Inmediatamente después de instalación
-
-    ✅ Configuración de red - Realizada de forma segura por SSH
-
-    ✅ IP estática - Configurada y verificada correctamente
-
-Errores Comunes Evitados:
-
-    ❌ No perder acceso durante configuración - Se usó IP de rescate
-
-    ❌ No sobreescribir configuración sin backup - Backup creado
-
-    ❌ No ignorar procesos DHCP activos - Verificados y detenidos
-
-    ❌ No asumir que funciona - Todas las pruebas ejecutadas
-
-Comandos de Rescate (en caso de problemas)
-
-Opción 1: Usar la IP de rescate
-bash
-
+**Opción 1: Usar la IP de rescate**
+```bash
 ssh victor31416@192.168.1.77
+```
 
-Opción 2: Restaurar configuración anterior
-bash
-
+**Opción 2: Restaurar configuración anterior**
+```bash
 # Desde la terminal local del servidor o por IP de rescate
 cp /etc/network/interfaces.backup* /etc/network/interfaces
 systemctl restart networking
+```
 
-Configuración Final del Sistema
-Parámetro	Valor Configurado
-Sistema Operativo	Debian 13 (Bookworm)
-Hostname	pve
-Usuario principal	victor31416
-IP Estática	192.168.1.76/24
-IP de Rescate	192.168.1.77/24
-Gateway	192.168.1.1
-DNS Primario	80.58.61.250
-DNS Secundario	1.1.1.1
-Servicio SSH	Activado y funcionando
+### Configuración Final del Sistema
+| Parámetro | Valor Configurado |
+|-----------|-------------------|
+| Sistema Operativo | Debian 13 (Bookworm) |
+| Hostname | `pve` |
+| Usuario principal | `victor31416` |
+| IP Estática | `192.168.1.76/24` |
+| IP de Rescate | `192.168.1.77/24` |
+| Gateway | `192.168.1.1` |
+| DNS Primario | `80.58.61.250` |
+| DNS Secundario | `1.1.1.1` |
+| Servicio SSH | Activado y funcionando |
 
-Documentación creada por: Victor 3,1416
-Fecha de creación: $(date +%d/%m/%Y)
-Última actualización: $(date +%d/%m/%Y %H:%M)
-Sistema: Debian 13 (Bookworm)
-Estado: ✅ Configuración completada y verificada
+---
 
-Esta documentación refleja el proceso REAL seguido durante la instalación y configuración del servidor.
+**Documentación creada por:** Victor 3,1416  
+**Fecha de creación:** $(date +%d/%m/%Y)  
+**Última actualización:** $(date +%d/%m/%Y %H:%M)  
+**Sistema:** Debian 13 (Bookworm)  
+**Estado:** ✅ Configuración completada y verificada  
+
+*Esta documentación refleja el proceso REAL seguido durante la instalación y configuración del servidor.*
