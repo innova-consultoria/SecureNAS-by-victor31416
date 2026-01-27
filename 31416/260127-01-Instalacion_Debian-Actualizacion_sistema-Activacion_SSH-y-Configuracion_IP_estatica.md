@@ -419,7 +419,7 @@ echo "Comando: ssh victor@192.168.1.100"
 
 **Opción 1: Usar la IP de rescate**
 ```bash
-ssh victor31416@192.168.1.101
+ssh victor@192.168.1.101
 ```
 
 **Opción 2: Restaurar configuración anterior**
