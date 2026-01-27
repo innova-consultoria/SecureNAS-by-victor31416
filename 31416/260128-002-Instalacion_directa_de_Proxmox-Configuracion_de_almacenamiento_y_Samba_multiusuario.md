@@ -5,13 +5,13 @@ markdown
 ---
 
 ## 📋 Tabla de Contenidos
-- [🚀 Objetivo del documento](#🚀-objetivo-del-documento)
-- [💻 Instalación directa de Proxmox VE 9.0](#💻-instalación-directa-de-proxmox-ve-90)
-- [🧩 Configuración de discos y pools ZFS](#🧩-configuración-de-discos-y-pools-zfs)
-- [🔐 Preparación de disco ext4 para Samba](#🔐-preparación-de-disco-ext4-para-samba)
-- [🌐 Configuración de Samba multiusuario](#🌐-configuración-de-samba-multiusuario)
-- [✅ Integración de almacenamiento en Proxmox](#✅-integración-de-almacenamiento-en-proxmox)
-- [📝 Notas Importantes](#📝-notas-importantes)
+- [🚀 Objetivo del documento](#-objetivo-del-documento)
+- [💻 Instalación directa de Proxmox VE 9.0](#-instalación-directa-de-proxmox-ve-90)
+- [🧩 Configuración de discos y pools ZFS](#-configuración-de-discos-y-pools-zfs)
+- [🔐 Preparación de disco ext4 para Samba](#-preparación-de-disco-ext4-para-samba)
+- [🌐 Configuración de Samba multiusuario](#-configuración-de-samba-multiusuario)
+- [✅ Integración de almacenamiento en Proxmox](#-integración-de-almacenamiento-en-proxmox)
+- [📝 Notas Importantes](#-notas-importantes)
 
 ---
 
@@ -328,9 +328,9 @@ Proxmox Storage	Integración completa en interfaz web
 | Estado ZFS | ONLINE, sin errores |
 | Estado discos | Correcto, sin particiones residuales |
 
+
 ---
 
-### ✍️ Autor, Fecha y Estado
 
 Documentación creada por: Victor 3,1416
 Fecha de creación: 28/01/2026
