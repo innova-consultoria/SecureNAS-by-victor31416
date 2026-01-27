@@ -1,4 +1,4 @@
-# 001 - Instalación y Configuración de Debian 13 como Servidor - Actualización del Sistema - SSH e IP estática.
+# 001 - Instalación y Configuración de Debian 13 como Servidor - Actualización del Sistema - SSH e IP estática
 
 ## 📋 Tabla de Contenidos
 1. [🚀 Preparación e Instalación](#-preparación-e-instalación)
@@ -68,6 +68,7 @@ Durante la instalación se seleccionaron únicamente:
 Una vez completada la instalación y reiniciado el sistema, se accedió directamente a la terminal del servidor.
 
 **Login inicial:**
+
 
 Login: root
 Password: [contraseña establecida durante instalación]
