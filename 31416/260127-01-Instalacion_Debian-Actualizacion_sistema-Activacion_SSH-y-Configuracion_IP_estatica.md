@@ -103,16 +103,22 @@ Instalación de Herramientas Básicas
 Se instalaron herramientas esenciales para la administración del sistema:
 bash
 
-# Instalar editores de texto y herramientas de red
-apt install -y vim nano net-tools
+# Instalar editores, herramientas de red y utilidades de sistema
+apt install -y vim nano curl wget htop net-tools tmux screen git
 
 Herramientas instaladas:
 
-    vim: Editor de texto avanzado
-
-    nano: Editor de texto simple
-
-    net-tools: Herramientas clásicas de red (ifconfig, netstat, etc.)
+| Paquete | Propósito | Uso Común |
+|---------|-----------|-----------|
+| **vim** | Editor de texto avanzado y modal | `vim archivo.conf` - Editar archivos de configuración |
+| **nano** | Editor de texto simple e intuitivo | `nano /etc/network/interfaces` - Edición rápida |
+| **curl** | Cliente para transferencia de datos URL | `curl -I https://google.com` - Ver encabezados HTTP |
+| **wget** | Herramienta para descargar archivos web | `wget https://ejemplo.com/archivo.tar.gz` - Descargas |
+| **htop** | Monitor de procesos interactivo | `htop` - Ver procesos, CPU, memoria en tiempo real |
+| **net-tools** | Utilidades clásicas de red | `ifconfig`, `netstat`, `route` - Diagnóstico de red |
+| **tmux** | Multiplexor de terminales | `tmux new -s sesion1` - Múltiples terminales en una |
+| **screen** | Alternativa a tmux para sesiones persistentes | `screen -S backup` - Mantener procesos tras desconexión |
+| **git** | Sistema de control de versiones | `git clone https://github.com/usuario/repo.git` |
 
 Activación del Servicio SSH
 
