@@ -70,31 +70,32 @@ zpool create -f \
   -O xattr=sa \
   -O acltype=posixacl \
   backup /dev/sdd2
+```
 
-🔐 Preparación de disco ext4 para Samba
+### 🔐 Preparación de disco ext4 para Samba
 Particionado de sdd:
 bash
-
+```bash
 sgdisk -n 1:0:+1T -t 1:8300 /dev/sdd
 sgdisk -n 2:0:0 -t 2:bf00 /dev/sdd
-
+```
 Formateo y montaje:
 bash
-
+```bash
 mkfs.ext4 /dev/sdd1
 mkdir -p /mnt/samba1tb
 mount /dev/sdd1 /mnt/samba1tb
-
-🌐 Configuración de Samba multiusuario
+```
+### 🌐 Configuración de Samba multiusuario
 Instalación de Samba:
 bash
-
+```bash
 apt update
 apt install samba -y
-
+```
 Creación de usuarios:
 bash
-
+```bash
 adduser victor
 adduser rorri
 adduser helena
@@ -104,10 +105,10 @@ smbpasswd -a victor
 smbpasswd -a rorri
 smbpasswd -a helena
 smbpasswd -a admin
-
+```
 Estructura de carpetas:
 bash
-
+```bash
 mkdir -p /mnt/samba1tb/comun
 mkdir -p /mnt/samba1tb/privado_victor
 mkdir -p /mnt/samba1tb/privado_rorri
@@ -122,7 +123,7 @@ chmod 700 /mnt/samba1tb/privado_*
 
 chown root:root /mnt/samba1tb/comun
 chmod 775 /mnt/samba1tb/comun
-
+```
 Configuración en smb.conf:
 ini
 
@@ -171,11 +172,11 @@ ini
 
 Reinicio de servicios:
 bash
-
+```bash
 systemctl restart smbd
 systemctl restart nmbd
-
-✅ Integración de almacenamiento en Proxmox
+```
+### ✅ Integración de almacenamiento en Proxmox
 Añadido desde interfaz web (castellano):
 
     Centro de datos → Almacenamiento → Añadir → ZFS
@@ -202,7 +203,7 @@ Añadido desde interfaz web (castellano):
 
         Contenido: ISO, Copia de seguridad, Snippets, Plantillas, Imágenes
 
-📝 Notas Importantes
+### 📝 Notas Importantes
 🧾 Resumen del Proceso Realizado
 Componente	Acción realizada
 Proxmox VE	Instalación directa desde ISO
@@ -331,10 +332,10 @@ Proxmox Storage	Integración completa en interfaz web
 
 ### ✍️ Autor, Fecha y Estado
 
-- **Autor:** Víctor (InnoVA Consultoría)  
-- **Fecha:** 2026-01-28  
-- **Estado del documento:** ✔ Completado y validado  
-- **Versión:** 1.0  
+Documentación creada por: Victor 3,1416
+Fecha de creación: 28/01/2026
+Última actualización: 28/01/2026 00:40
+Sistema: Proxmox (Virtual Environment 9.0.3)
+Estado: ✅ Configuración completada y verificada
 
-
-Solo dímelo.
+Esta documentación refleja el proceso REAL seguido durante la instalación y configuración del servidor.
